@@ -2,6 +2,21 @@
 Changelog for package plotjuggler
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+3.17.0 (2026-04-08)
+-----------
+
+* Add built-in `DataLoadBLF` capabilities for CAN/CAN FD loading with DBC decode support and raw-byte fallback for undecoded messages.
+* Add BLF-oriented UI/interaction updates, including data header summary, signal tree behavior tuning, timestamp display fixes, and plot interaction enhancements.
+* Add built-in Lua snippets for single-signal filtering:
+  - `01_ax_mv_avg_flt`
+  - `02_delta_v_from_speed`
+  - `03_dvx_mv_avg`
+  - `04_dvx_low_pass`
+* Add snippet migration logic to preserve older local snippet names while moving to the new prefixed names.
+* Add local dev/dist workspace migration and packaging flow for Ubuntu 20.04 delivery.
+* Improve BLF loading performance by caching series writes and filtering unmapped channels.
+* Note Windows startup issue guidance: if the main window does not open, install the latest Microsoft Visual C++ runtime from https://learn.microsoft.com/zh-cn/cpp/windows/latest-supported-vc-redist?view=msvc-170
+
 3.16.0 (2026-03-10)
 -----------
 * add plotjuggler and foxglove bridge plugins
