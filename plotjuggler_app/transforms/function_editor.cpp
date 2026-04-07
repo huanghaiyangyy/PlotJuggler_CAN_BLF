@@ -420,14 +420,18 @@ bool FunctionEditorWidget::eventFilter(QObject* obj, QEvent* ev)
 
 void FunctionEditorWidget::importSnippets(const QByteArray& xml_text)
 {
+  qDebug() << "[DEBUG] FunctionEditorWidget: importSnippets start, size:" << xml_text.size();
   ui->snippetsListSaved->clear();
+  qDebug() << "[DEBUG] FunctionEditorWidget: snippetsListSaved cleared";
 
   _snipped_saved = GetSnippetsFromXML(xml_text);
+  qDebug() << "[DEBUG] FunctionEditorWidget: parsed saved snippets count:" << _snipped_saved.size();
 
   for (const auto& it : _snipped_saved)
   {
     ui->snippetsListSaved->addItem(it.first);
   }
+  qDebug() << "[DEBUG] FunctionEditorWidget: snippet names added to list";
 
   for (const auto& custom_it : _transform_maps)
   {
@@ -447,7 +451,9 @@ void FunctionEditorWidget::importSnippets(const QByteArray& xml_text)
     snippet.global_vars = math_plot->snippet().global_vars;
     snippet.function = math_plot->snippet().function;
   }
+  qDebug() << "[DEBUG] FunctionEditorWidget: custom transform snippets inspected";
   ui->snippetsListSaved->sortItems();
+  qDebug() << "[DEBUG] FunctionEditorWidget: snippetsListSaved sorted";
 }
 
 QByteArray FunctionEditorWidget::exportSnippets() const

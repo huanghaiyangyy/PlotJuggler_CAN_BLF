@@ -373,19 +373,7 @@ MainWindow::MainWindow(const QCommandLineParser& commandline_parser, QWidget* pa
   ui->formulaPage->setLayout(editor_layout);
   qDebug() << "[DEBUG] MainWindow: formulaPage layout set";
 
-  qDebug() << "[DEBUG] MainWindow: before creating FunctionEditorWidget";
-  _function_editor = new FunctionEditorWidget(_mapped_plot_data, _transform_functions, this);
-  qDebug() << "[DEBUG] MainWindow: after creating FunctionEditorWidget";
-  editor_layout->addWidget(_function_editor);
-  qDebug() << "[DEBUG] MainWindow: FunctionEditorWidget added to layout";
-
-  connect(_function_editor, &FunctionEditorWidget::closed, this,
-          [this]() { ui->widgetStack->setCurrentIndex(0); });
-
-  connect(this, &MainWindow::stylesheetChanged, _function_editor,
-          &FunctionEditorWidget::on_stylesheetChanged);
-
-  connect(_function_editor, &FunctionEditorWidget::accept, this, &MainWindow::onCustomPlotCreated);
+  qDebug() << "[DEBUG] MainWindow: FunctionEditorWidget initialization deferred";
 
   QString theme = settings.value("Preferences::theme", "light").toString();
   if (theme != "dark")
@@ -429,6 +417,39 @@ MainWindow::~MainWindow()
   _mapped_plot_data.user_defined.clear();
 
   delete ui;
+}
+
+void MainWindow::ensureFunctionEditorInitialized()
+{
+  if (_function_editor)
+  {
+    return;
+  }
+
+  auto editor_layout = qobject_cast<QVBoxLayout*>(ui->formulaPage->layout());
+  if (!editor_layout)
+  {
+    editor_layout = new QVBoxLayout();
+    editor_layout->setMargin(0);
+    ui->formulaPage->setLayout(editor_layout);
+    qDebug() << "[DEBUG] MainWindow: formulaPage layout recreated";
+  }
+
+  qDebug() << "[DEBUG] MainWindow: before creating FunctionEditorWidget";
+  _function_editor = new FunctionEditorWidget(_mapped_plot_data, _transform_functions, this);
+  qDebug() << "[DEBUG] MainWindow: after creating FunctionEditorWidget";
+
+  editor_layout->addWidget(_function_editor);
+  qDebug() << "[DEBUG] MainWindow: FunctionEditorWidget added to layout";
+
+  connect(_function_editor, &FunctionEditorWidget::closed, this,
+          [this]() { ui->widgetStack->setCurrentIndex(0); });
+
+  connect(this, &MainWindow::stylesheetChanged, _function_editor,
+          &FunctionEditorWidget::on_stylesheetChanged);
+
+  connect(_function_editor, &FunctionEditorWidget::accept, this, &MainWindow::onCustomPlotCreated);
+  qDebug() << "[DEBUG] MainWindow: FunctionEditorWidget signals connected";
 }
 
 void MainWindow::onUndoableChange()
@@ -2923,6 +2944,7 @@ void MainWindow::closeEvent(QCloseEvent* event)
 
 void MainWindow::onAddCustomPlot(const std::string& plot_name)
 {
+  ensureFunctionEditorInitialized();
   ui->widgetStack->setCurrentIndex(1);
   _function_editor->setLinkedPlotName(QString::fromStdString(plot_name));
   _function_editor->createNewPlot();
@@ -2930,6 +2952,7 @@ void MainWindow::onAddCustomPlot(const std::string& plot_name)
 
 void MainWindow::onEditCustomPlot(const std::string& plot_name)
 {
+  ensureFunctionEditorInitialized();
   ui->widgetStack->setCurrentIndex(1);
   auto custom_it = _transform_functions.find(plot_name);
   if (custom_it == _transform_functions.end())
@@ -3047,7 +3070,10 @@ void MainWindow::onCustomPlotCreated(std::vector<CustomPlotPtr> custom_plots)
 
   onUpdateLeftTableValues();
   ui->widgetStack->setCurrentIndex(0);
-  _function_editor->clear();
+  if (_function_editor)
+  {
+    _function_editor->clear();
+  }
 
   for (auto plot : widget_to_replot)
   {
