@@ -2,6 +2,12 @@
 Changelog for package plotjuggler
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+3.17.0 (2026-04-08)
+-----------
+* add built-in Lua snippets for basic speed/acceleration filtering, differentiation, and low-pass processing
+* improve BLF loading performance by caching series writes and filtering unmapped channels
+* note Windows startup issue guidance: if the main window does not open, install the latest Microsoft Visual C++ runtime from https://learn.microsoft.com/zh-cn/cpp/windows/latest-supported-vc-redist?view=msvc-170
+
 3.16.0 (2026-03-10)
 -----------
 * add plotjuggler and foxglove bridge plugins
