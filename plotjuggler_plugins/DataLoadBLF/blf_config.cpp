@@ -81,7 +81,7 @@ bool LoadConfigFromXml(const QDomElement& parent, BlfPluginConfig& config, std::
     return false;
   }
 
-  config.emit_raw = ReadBoolAttribute(cfg, "emit_raw", true);
+  config.emit_raw = ReadBoolAttribute(cfg, "emit_raw", false);
   config.emit_decoded = ReadBoolAttribute(cfg, "emit_decoded", true);
   config.use_source_timestamp = ReadBoolAttribute(cfg, "use_source_timestamp", true);
   config.dbc_files.clear();

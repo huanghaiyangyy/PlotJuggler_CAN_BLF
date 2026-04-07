@@ -28,8 +28,9 @@ QDomElement findSnippetByName(const QDomDocument& doc, const QString& name)
 
 QDomDocument loadDefaultSnippets()
 {
-  QFile file(defaultSnippetsPath());
-  EXPECT_TRUE(file.open(QIODevice::ReadOnly)) << "Failed to open: " << defaultSnippetsPath();
+  const auto path = defaultSnippetsPath();
+  QFile file(path);
+  EXPECT_TRUE(file.open(QIODevice::ReadOnly)) << "Failed to open: " << path.toStdString();
 
   QDomDocument doc;
   QString parse_error;
@@ -47,27 +48,48 @@ TEST(DefaultSnippets, IncludesMovingAverageAndLowPassFilters)
 {
   const auto doc = loadDefaultSnippets();
 
-  EXPECT_FALSE(findSnippetByName(doc, "01_moving_average_single_signal").isNull());
-  EXPECT_FALSE(findSnippetByName(doc, "02_first_order_low_pass_filter").isNull());
+  EXPECT_FALSE(findSnippetByName(doc, "01_ax_mv_avg_flt").isNull());
+  EXPECT_FALSE(findSnippetByName(doc, "02_delta_v_from_speed").isNull());
+  EXPECT_FALSE(findSnippetByName(doc, "03_dvx_mv_avg").isNull());
+  EXPECT_FALSE(findSnippetByName(doc, "04_dvx_low_pass").isNull());
 }
 
 TEST(DefaultSnippets, NewSnippetsContainExpectedConfigVariables)
 {
   const auto doc = loadDefaultSnippets();
 
-  const auto ma_snippet = findSnippetByName(doc, "01_moving_average_single_signal");
-  ASSERT_FALSE(ma_snippet.isNull());
-  const auto ma_global = ma_snippet.firstChildElement("global").text();
-  const auto ma_function = ma_snippet.firstChildElement("function").text();
-  EXPECT_TRUE(ma_global.contains("moving_average_window"));
-  EXPECT_TRUE(ma_function.contains("moving_average_window"));
-  EXPECT_TRUE(ma_function.contains("15"));
+  const auto ax_mv_avg = findSnippetByName(doc, "01_ax_mv_avg_flt");
+  ASSERT_FALSE(ax_mv_avg.isNull());
+  const auto ax_mv_avg_global = ax_mv_avg.firstChildElement("global").text();
+  const auto ax_mv_avg_function = ax_mv_avg.firstChildElement("function").text();
+  EXPECT_TRUE(ax_mv_avg_global.contains("ax_mv_avg_filter_window_size"));
+  EXPECT_TRUE(ax_mv_avg_global.contains("ax_mv_avg_flt_offset"));
+  EXPECT_TRUE(ax_mv_avg_function.contains("ax_mv_avg_filter_window_size"));
 
-  const auto lp_snippet = findSnippetByName(doc, "02_first_order_low_pass_filter");
-  ASSERT_FALSE(lp_snippet.isNull());
-  const auto lp_global = lp_snippet.firstChildElement("global").text();
-  const auto lp_function = lp_snippet.firstChildElement("function").text();
-  EXPECT_TRUE(lp_global.contains("dvx_low_pass_filter_alpha"));
-  EXPECT_TRUE(lp_function.contains("prev_delta_v_filtered"));
-  EXPECT_TRUE(lp_function.contains("delta_v"));
+  const auto delta_v = findSnippetByName(doc, "02_delta_v_from_speed");
+  ASSERT_FALSE(delta_v.isNull());
+  const auto delta_v_global = delta_v.firstChildElement("global").text();
+  const auto delta_v_function = delta_v.firstChildElement("function").text();
+  EXPECT_TRUE(delta_v_global.contains("delta_v_from_speed_prev_speed"));
+  EXPECT_TRUE(delta_v_global.contains("delta_v_from_speed_prev_time"));
+  EXPECT_TRUE(delta_v_function.contains("dt"));
+  EXPECT_TRUE(delta_v_function.contains("/ 3.6"));
+  EXPECT_TRUE(delta_v_function.contains("dt > 0"));
+
+  const auto dvx_mv_avg = findSnippetByName(doc, "03_dvx_mv_avg");
+  ASSERT_FALSE(dvx_mv_avg.isNull());
+  const auto dvx_mv_avg_global = dvx_mv_avg.firstChildElement("global").text();
+  const auto dvx_mv_avg_function = dvx_mv_avg.firstChildElement("function").text();
+  EXPECT_TRUE(dvx_mv_avg_global.contains("dvx_mv_avg_filter_window_size"));
+  EXPECT_TRUE(dvx_mv_avg_global.contains("dvx_mv_avg_min"));
+  EXPECT_TRUE(dvx_mv_avg_global.contains("dvx_mv_avg_max"));
+  EXPECT_TRUE(dvx_mv_avg_function.contains("delta_v"));
+
+  const auto dvx_low_pass = findSnippetByName(doc, "04_dvx_low_pass");
+  ASSERT_FALSE(dvx_low_pass.isNull());
+  const auto dvx_low_pass_global = dvx_low_pass.firstChildElement("global").text();
+  const auto dvx_low_pass_function = dvx_low_pass.firstChildElement("function").text();
+  EXPECT_TRUE(dvx_low_pass_global.contains("dvx_low_pass_filter_alpha"));
+  EXPECT_TRUE(dvx_low_pass_global.contains("dvx_low_pass_initialized_acc"));
+  EXPECT_TRUE(dvx_low_pass_function.contains("dvx_low_pass_prev"));
 }

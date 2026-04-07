@@ -13,7 +13,7 @@ namespace PJ::BLF
 
 struct BlfPluginConfig
 {
-  bool emit_raw = true;
+  bool emit_raw = false;
   bool emit_decoded = true;
   bool use_source_timestamp = true;
   std::vector<std::string> dbc_files;

@@ -14,8 +14,10 @@ This fork adds local features and workflow updates focused on CAN/BLF analysis a
 - Added built-in `DataLoadBLF` capabilities for CAN/CAN FD loading with DBC decode support and raw-byte fallback for undecoded messages.
 - Added BLF-oriented UI/interaction updates, including data header summary, signal tree behavior tuning, timestamp display fixes, and plot interaction enhancements.
 - Added built-in Lua snippets for single-signal filtering:
-  - `01_moving_average_single_signal`
-  - `02_first_order_low_pass_filter`
+  - `01_ax_mv_avg_flt`
+  - `02_delta_v_from_speed`
+  - `03_dvx_mv_avg`
+  - `04_dvx_low_pass`
 - Added snippet migration logic to preserve older local snippet names while moving to the new prefixed names.
 - Added local dev/dist workspace migration and packaging flow for Ubuntu 20.04 delivery.
 

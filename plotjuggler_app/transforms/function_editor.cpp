@@ -132,8 +132,17 @@ FunctionEditorWidget::FunctionEditorWidget(PlotDataMapRef& plotMapData,
     bool updated = false;
 
     const std::vector<std::pair<QString, QString>> renamed_defaults = {
-      { "moving_average_single_signal", "01_moving_average_single_signal" },
-      { "first_order_low_pass_filter", "02_first_order_low_pass_filter" },
+      { "moving_average_single_signal", "01_ax_mv_avg_flt" },
+      { "01_moving_average_single_signal", "01_ax_mv_avg_flt" },
+      { "first_order_low_pass_filter", "04_dvx_low_pass" },
+      { "02_first_order_low_pass_filter", "04_dvx_low_pass" },
+      { "ax_mv_avg_flt", "01_ax_mv_avg_flt" },
+      { "03_ax_mv_avg_flt", "01_ax_mv_avg_flt" },
+      { "delta_v_from_speed", "02_delta_v_from_speed" },
+      { "dvx_mv_avg", "03_dvx_mv_avg" },
+      { "04_dvx_mv_avg", "03_dvx_mv_avg" },
+      { "dvx_low_pass", "04_dvx_low_pass" },
+      { "05_dvx_low_pass", "04_dvx_low_pass" },
     };
 
     for (const auto& [legacy_name, new_name] : renamed_defaults)
