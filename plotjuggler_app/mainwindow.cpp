@@ -298,46 +298,60 @@ MainWindow::MainWindow(const QCommandLineParser& commandline_parser, QWidget* pa
 
   // qDebug() << "restoreGeometry";
 
+  qDebug() << "[DEBUG] MainWindow: before settings UI restore";
   bool activate_grid = settings.value("MainWindow.activateGrid", false).toBool();
   ui->buttonActivateGrid->setChecked(activate_grid);
+  qDebug() << "[DEBUG] MainWindow: activate_grid set";
 
   bool zoom_link_active = settings.value("MainWindow.buttonLink", true).toBool();
   ui->buttonLink->setChecked(zoom_link_active);
+  qDebug() << "[DEBUG] MainWindow: buttonLink set";
 
   bool ration_active = settings.value("MainWindow.buttonRatio", true).toBool();
   ui->buttonRatio->setChecked(ration_active);
+  qDebug() << "[DEBUG] MainWindow: buttonRatio set";
 
   int streaming_buffer_value = settings.value("MainWindow.streamingBufferValue", 5).toInt();
   ui->streamingSpinBox->setValue(streaming_buffer_value);
+  qDebug() << "[DEBUG] MainWindow: streamingSpinBox set";
 
   bool datetime_display = settings.value("MainWindow.dateTimeDisplay", false).toBool();
   ui->buttonUseDateTime->setChecked(datetime_display);
+  qDebug() << "[DEBUG] MainWindow: buttonUseDateTime set";
 
   bool remove_time_offset = settings.value("MainWindow.removeTimeOffset", true).toBool();
   ui->buttonRemoveTimeOffset->setChecked(remove_time_offset);
+  qDebug() << "[DEBUG] MainWindow: buttonRemoveTimeOffset set";
 
   if (settings.value("MainWindow.hiddenFileFrame", false).toBool())
   {
     ui->buttonHideFileFrame->setText("+");
     ui->frameFile->setHidden(true);
   }
+  qDebug() << "[DEBUG] MainWindow: hiddenFileFrame check done";
+
   if (settings.value("MainWindow.hiddenStreamingFrame", false).toBool())
   {
     ui->buttonHideStreamingFrame->setText("+");
     ui->frameStreaming->setHidden(true);
   }
+  qDebug() << "[DEBUG] MainWindow: hiddenStreamingFrame check done";
+
   if (settings.value("MainWindow.hiddenPublishersFrame", false).toBool())
   {
     ui->buttonHidePublishersFrame->setText("+");
     ui->framePublishers->setHidden(true);
   }
+  qDebug() << "[DEBUG] MainWindow: hiddenPublishersFrame check done";
 
   //----------------------------------------------------------
+  qDebug() << "[DEBUG] MainWindow: before tracker icons load";
   QIcon trackerIconA, trackerIconB, trackerIconC;
 
   trackerIconA.addFile(QStringLiteral(":/style_light/line_tracker.png"), QSize(36, 36));
   trackerIconB.addFile(QStringLiteral(":/style_light/line_tracker_1.png"), QSize(36, 36));
   trackerIconC.addFile(QStringLiteral(":/style_light/line_tracker_a.png"), QSize(36, 36));
+  qDebug() << "[DEBUG] MainWindow: tracker icons loaded";
 
   _tracker_button_icons[CurveTracker::LINE_ONLY] = trackerIconA;
   _tracker_button_icons[CurveTracker::VALUE] = trackerIconB;
@@ -346,16 +360,22 @@ MainWindow::MainWindow(const QCommandLineParser& commandline_parser, QWidget* pa
   int tracker_setting =
       settings.value("MainWindow.timeTrackerSetting", (int)CurveTracker::VALUE).toInt();
   _tracker_param = static_cast<CurveTracker::Parameter>(tracker_setting);
+  qDebug() << "[DEBUG] MainWindow: tracker param set";
 
   ui->buttonTimeTracker->setIcon(_tracker_button_icons[_tracker_param]);
+  qDebug() << "[DEBUG] MainWindow: buttonTimeTracker icon set";
 
   forEachWidget([&](PlotWidget* plot) { plot->configureTracker(_tracker_param); });
+  qDebug() << "[DEBUG] MainWindow: forEachWidget configureTracker done";
 
   auto editor_layout = new QVBoxLayout();
   editor_layout->setMargin(0);
   ui->formulaPage->setLayout(editor_layout);
+  qDebug() << "[DEBUG] MainWindow: formulaPage layout set";
+
   _function_editor = new FunctionEditorWidget(_mapped_plot_data, _transform_functions, this);
   editor_layout->addWidget(_function_editor);
+  qDebug() << "[DEBUG] MainWindow: FunctionEditorWidget created";
 
   connect(_function_editor, &FunctionEditorWidget::closed, this,
           [this]() { ui->widgetStack->setCurrentIndex(0); });
