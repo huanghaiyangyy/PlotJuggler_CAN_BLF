@@ -150,4 +150,40 @@ TEST(BlfDecoderPipeline, FallsBackToRawWhenDbcCannotDecodeFrame)
   EXPECT_EQ(stats.decode_errors, 0U);
 }
 
+TEST(BlfDecoderPipeline, SkipsUnmappedChannelWhenDecodedModeIsEnabled)
+{
+  DbcManager manager([](const std::string&) { return std::make_unique<FakeDecoder>(); });
+  ASSERT_TRUE(manager.LoadBindings({{1U, "vehicle.dbc"}}));
+
+  BlfPluginConfig config;
+  config.emit_raw = true;
+  config.emit_decoded = true;
+  config.use_source_timestamp = true;
+
+  RecordingSeriesWriter writer;
+  BlfDecoderPipeline pipeline(config, &manager, &writer);
+
+  NormalizedCanFrame frame;
+  frame.timestamp = 2.0;
+  frame.channel = 7U;  // No binding for channel 7.
+  frame.id = 0x123U;
+  frame.is_fd = false;
+  frame.is_brs = false;
+  frame.is_esi = false;
+  frame.extended = false;
+  frame.dlc = 8U;
+  frame.size = 2U;
+  frame.data[0] = 0xABU;
+  frame.data[1] = 0xCDU;
+
+  ASSERT_TRUE(pipeline.ProcessFrame(frame));
+  EXPECT_TRUE(writer.samples.empty());
+
+  const BlfDecodeStats stats = pipeline.stats();
+  EXPECT_EQ(stats.frames_processed, 1U);
+  EXPECT_EQ(stats.raw_samples_written, 0U);
+  EXPECT_EQ(stats.decoded_samples_written, 0U);
+  EXPECT_EQ(stats.decode_errors, 0U);
+}
+
 }  // namespace PJ::BLF
