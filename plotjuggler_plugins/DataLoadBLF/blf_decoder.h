@@ -3,6 +3,7 @@
 #include <array>
 #include <cstdint>
 #include <string>
+#include <unordered_map>
 
 #include "blf_config.h"
 #include "dbc_manager.h"
@@ -49,6 +50,22 @@ public:
   BlfDecodeStats stats() const;
 
 private:
+  struct RawSeriesNames
+  {
+    std::string dlc;
+    std::string is_fd;
+    std::string is_brs;
+    std::string is_esi;
+    std::array<std::string, 64> data;
+  };
+
+  using DecodedSignalMap = std::unordered_map<std::string, std::string>;
+  using DecodedMessageMap = std::unordered_map<std::string, DecodedSignalMap>;
+
+  const RawSeriesNames& GetOrCreateRawSeriesNames(const NormalizedCanFrame& frame);
+  const std::string& GetOrCreateDecodedSeriesName(uint32_t channel, const std::string& message,
+                                                  const std::string& signal);
+
   double ResolveTimestamp(const NormalizedCanFrame& frame) const;
   void EmitRaw(const NormalizedCanFrame& frame, double timestamp);
   bool EmitDecoded(const NormalizedCanFrame& frame, double timestamp);
@@ -56,6 +73,8 @@ private:
   BlfPluginConfig config_;
   DbcManager* dbc_manager_ = nullptr;
   ISeriesWriter* series_writer_ = nullptr;
+  std::unordered_map<uint64_t, RawSeriesNames> raw_series_names_cache_;
+  std::unordered_map<uint32_t, DecodedMessageMap> decoded_series_names_cache_;
   BlfDecodeStats stats_;
 };
 

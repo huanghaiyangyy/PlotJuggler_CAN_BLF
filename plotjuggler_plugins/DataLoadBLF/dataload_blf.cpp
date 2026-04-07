@@ -8,6 +8,7 @@
 
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -32,12 +33,24 @@ public:
 
   void WriteSample(const std::string& series_name, double timestamp, double value) override
   {
-    auto& series = destination_.getOrCreateNumeric(series_name, nullptr);
-    series.pushBack({timestamp, value});
+    PJ::PlotData* series = nullptr;
+    const auto cache_it = series_cache_.find(series_name);
+    if (cache_it != series_cache_.end())
+    {
+      series = cache_it->second;
+    }
+    else
+    {
+      auto& created = destination_.getOrCreateNumeric(series_name, nullptr);
+      series = &created;
+      series_cache_.emplace(series_name, series);
+    }
+    series->pushBack({timestamp, value});
   }
 
 private:
   PJ::PlotDataMapRef& destination_;
+  std::unordered_map<std::string, PJ::PlotData*> series_cache_;
 };
 
 }  // namespace
