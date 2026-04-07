@@ -373,9 +373,11 @@ MainWindow::MainWindow(const QCommandLineParser& commandline_parser, QWidget* pa
   ui->formulaPage->setLayout(editor_layout);
   qDebug() << "[DEBUG] MainWindow: formulaPage layout set";
 
+  qDebug() << "[DEBUG] MainWindow: before creating FunctionEditorWidget";
   _function_editor = new FunctionEditorWidget(_mapped_plot_data, _transform_functions, this);
+  qDebug() << "[DEBUG] MainWindow: after creating FunctionEditorWidget";
   editor_layout->addWidget(_function_editor);
-  qDebug() << "[DEBUG] MainWindow: FunctionEditorWidget created";
+  qDebug() << "[DEBUG] MainWindow: FunctionEditorWidget added to layout";
 
   connect(_function_editor, &FunctionEditorWidget::closed, this,
           [this]() { ui->widgetStack->setCurrentIndex(0); });
