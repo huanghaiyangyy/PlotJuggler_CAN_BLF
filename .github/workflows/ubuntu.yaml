@@ -95,6 +95,7 @@ jobs:
             mkdir -p build
             if ! cmake . -B build -DCMAKE_BUILD_TYPE=Release -DPJ_INSTALLATION="appimage" \
               -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+              -DPJ_ENABLE_VECTOR_BLF=ON -DPJ_ENABLE_DBCPPP=ON \
               -DPJ_ENABLE_PARSER_PROTOBUF=OFF \
               -DPJ_PLUGINS_DIRECTORY="bin" 2>&1 | tee build/configure.log; then
               tail="$(tail -n 120 build/configure.log)"
@@ -113,6 +114,25 @@ jobs:
               tail="${tail//$'\r'/'%0D'}"
               tail="${tail//$'\n'/'%0A'}"
               echo "::error title=Build Plotjuggler failed::${tail}"
+              exit 1
+            fi
+
+            if [ ! -f build/bin/libDataLoadBLF.so ]; then
+              echo "::error title=BLF plugin missing::build/bin/libDataLoadBLF.so was not produced"
+              exit 1
+            fi
+
+            readelf -d build/bin/libDataLoadBLF.so | tee build/dataload_blf.readelf
+            if ! grep -q "libVector_BLF" build/dataload_blf.readelf; then
+              echo "::error title=BLF link check failed::libDataLoadBLF.so is not linked with libVector_BLF"
+              exit 1
+            fi
+            if ! grep -q "libdbcppp" build/dataload_blf.readelf; then
+              echo "::error title=DBC link check failed::libDataLoadBLF.so is not linked with libdbcppp"
+              exit 1
+            fi
+            if strings build/bin/libDataLoadBLF.so | grep -q "dbcppp support is not available in this build"; then
+              echo "::error title=DBC support disabled::libDataLoadBLF.so contains fallback 'dbcppp support is not available in this build'"
               exit 1
             fi
 
