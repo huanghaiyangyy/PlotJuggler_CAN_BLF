@@ -150,7 +150,7 @@ TEST(BlfDecoderPipeline, FallsBackToRawWhenDbcCannotDecodeFrame)
   EXPECT_EQ(stats.decode_errors, 0U);
 }
 
-TEST(BlfDecoderPipeline, FallsBackToRawForUnmappedChannelWhenDecodedModeIsEnabled)
+TEST(BlfDecoderPipeline, SkipsUnmappedChannelWhenDecodedModeIsEnabled)
 {
   DbcManager manager([](const std::string&) { return std::make_unique<FakeDecoder>(); });
   ASSERT_TRUE(manager.LoadBindings({{1U, "vehicle.dbc"}}));
@@ -177,14 +177,11 @@ TEST(BlfDecoderPipeline, FallsBackToRawForUnmappedChannelWhenDecodedModeIsEnable
   frame.data[1] = 0xCDU;
 
   ASSERT_TRUE(pipeline.ProcessFrame(frame));
-  EXPECT_TRUE(writer.HasSample("raw/can7/0x123/dlc", 2.0, 8.0));
-  EXPECT_TRUE(writer.HasSample("raw/can7/0x123/data_00", 2.0, 171.0));
-  EXPECT_TRUE(writer.HasSample("raw/can7/0x123/data_01", 2.0, 205.0));
-  EXPECT_FALSE(writer.HasSample("dbc/can7/VehicleStatus/SpeedKph", 2.0, 88.5));
+  EXPECT_TRUE(writer.samples.empty());
 
   const BlfDecodeStats stats = pipeline.stats();
   EXPECT_EQ(stats.frames_processed, 1U);
-  EXPECT_EQ(stats.raw_samples_written, 6U);
+  EXPECT_EQ(stats.raw_samples_written, 0U);
   EXPECT_EQ(stats.decoded_samples_written, 0U);
   EXPECT_EQ(stats.decode_errors, 0U);
 }
