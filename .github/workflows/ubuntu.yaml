@@ -149,8 +149,7 @@ jobs:
               -d ./io.plotjuggler.PlotJuggler.desktop \
               -i ./plotjuggler.png \
               --plugin qt --output appimage
-            SAFE_REF_NAME="${{ github.ref_name }}"
-            SAFE_REF_NAME="${SAFE_REF_NAME//\//-}"
+            SAFE_REF_NAME="$(printf '%s' "${{ github.ref_name }}" | tr '/' '-')"
             APPIMAGE_NAME="PlotJuggler-branch-${SAFE_REF_NAME}-${{ matrix.arch }}.AppImage"
             if [ "${{ github.event_name }}" = "pull_request" ]; then
               APPIMAGE_NAME="PlotJuggler-pr${{ github.event.pull_request.number }}-${{ matrix.arch }}.AppImage"
