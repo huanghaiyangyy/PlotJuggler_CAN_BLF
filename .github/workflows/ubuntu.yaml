@@ -138,7 +138,6 @@ jobs:
 
       - name: Build AppImage
         working-directory: ${{ github.workspace }}
-        if: startsWith(github.ref, 'refs/tags/')
         run: |
             wget https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-${{ matrix.arch }}.AppImage
             wget https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-${{ matrix.arch }}.AppImage
@@ -150,19 +149,27 @@ jobs:
               -d ./io.plotjuggler.PlotJuggler.desktop \
               -i ./plotjuggler.png \
               --plugin qt --output appimage
-            mv PlotJuggler-${{ matrix.arch }}.AppImage PlotJuggler-${{ github.ref_name }}-${{ matrix.arch }}.AppImage
+            SAFE_REF_NAME="${{ github.ref_name }}"
+            SAFE_REF_NAME="${SAFE_REF_NAME//\//-}"
+            APPIMAGE_NAME="PlotJuggler-branch-${SAFE_REF_NAME}-${{ matrix.arch }}.AppImage"
+            if [ "${{ github.event_name }}" = "pull_request" ]; then
+              APPIMAGE_NAME="PlotJuggler-pr${{ github.event.pull_request.number }}-${{ matrix.arch }}.AppImage"
+            elif [ "${{ startsWith(github.ref, 'refs/tags/') }}" = "true" ]; then
+              APPIMAGE_NAME="PlotJuggler-${SAFE_REF_NAME}-${{ matrix.arch }}.AppImage"
+            fi
+            mv PlotJuggler-${{ matrix.arch }}.AppImage "${APPIMAGE_NAME}"
+            echo "APPIMAGE_NAME=${APPIMAGE_NAME}" >> "$GITHUB_ENV"
 
       - name: Upload AppImage
         uses: actions/upload-artifact@v7
-        if: startsWith(github.ref, 'refs/tags/')
         with:
-          name: PlotJuggler-${{ github.ref_name }}-${{ matrix.arch }}.AppImage
-          path: PlotJuggler-${{ github.ref_name }}-${{ matrix.arch }}.AppImage
+          name: ${{ env.APPIMAGE_NAME }}
+          path: ${{ env.APPIMAGE_NAME }}
 
       - name: Upload to Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: PlotJuggler-${{ github.ref_name }}-${{ matrix.arch }}.AppImage
+          files: ${{ env.APPIMAGE_NAME }}
           generate_release_notes: true
           fail_on_unmatched_files: false
