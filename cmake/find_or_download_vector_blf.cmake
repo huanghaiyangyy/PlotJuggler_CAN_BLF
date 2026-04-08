@@ -47,7 +47,10 @@ function(find_or_download_vector_blf)
   cpmaddpackage(
     NAME vector_blf
     GIT_REPOSITORY https://github.com/Technica-Engineering/vector_blf.git
-    GIT_TAG v2.4.2
+    # v2.4.2 stops reading when unknown BLF object types are encountered.
+    # Pin to the upstream commit that includes "Skip unknown object types"
+    # to keep parsing consistent with locally validated builds.
+    GIT_TAG 3512fc2ddca43248c95b773905d9c3ba46bc6570
     GIT_SHALLOW TRUE
     OPTIONS "OPTION_RUN_DOXYGEN OFF"
             "OPTION_BUILD_EXAMPLES OFF"

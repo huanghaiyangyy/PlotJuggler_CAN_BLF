@@ -95,6 +95,7 @@ jobs:
             mkdir -p build
             if ! cmake . -B build -DCMAKE_BUILD_TYPE=Release -DPJ_INSTALLATION="appimage" \
               -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+              -DPJ_ENABLE_VECTOR_BLF=ON -DPJ_ENABLE_DBCPPP=ON \
               -DPJ_ENABLE_PARSER_PROTOBUF=OFF \
               -DPJ_PLUGINS_DIRECTORY="bin" 2>&1 | tee build/configure.log; then
               tail="$(tail -n 120 build/configure.log)"
@@ -116,9 +117,27 @@ jobs:
               exit 1
             fi
 
+            if [ ! -f build/bin/libDataLoadBLF.so ]; then
+              echo "::error title=BLF plugin missing::build/bin/libDataLoadBLF.so was not produced"
+              exit 1
+            fi
+
+            readelf -d build/bin/libDataLoadBLF.so | tee build/dataload_blf.readelf
+            if ! grep -q "libVector_BLF" build/dataload_blf.readelf; then
+              echo "::error title=BLF link check failed::libDataLoadBLF.so is not linked with libVector_BLF"
+              exit 1
+            fi
+            if ! grep -q "libdbcppp" build/dataload_blf.readelf; then
+              echo "::error title=DBC link check failed::libDataLoadBLF.so is not linked with libdbcppp"
+              exit 1
+            fi
+            if strings build/bin/libDataLoadBLF.so | grep -q "dbcppp support is not available in this build"; then
+              echo "::error title=DBC support disabled::libDataLoadBLF.so contains fallback 'dbcppp support is not available in this build'"
+              exit 1
+            fi
+
       - name: Build AppImage
         working-directory: ${{ github.workspace }}
-        if: startsWith(github.ref, 'refs/tags/')
         run: |
             wget https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-${{ matrix.arch }}.AppImage
             wget https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-${{ matrix.arch }}.AppImage
@@ -130,19 +149,26 @@ jobs:
               -d ./io.plotjuggler.PlotJuggler.desktop \
               -i ./plotjuggler.png \
               --plugin qt --output appimage
-            mv PlotJuggler-${{ matrix.arch }}.AppImage PlotJuggler-${{ github.ref_name }}-${{ matrix.arch }}.AppImage
+            SAFE_REF_NAME="$(printf '%s' "${{ github.ref_name }}" | tr '/' '-')"
+            APPIMAGE_NAME="PlotJuggler-branch-${SAFE_REF_NAME}-${{ matrix.arch }}.AppImage"
+            if [ "${{ github.event_name }}" = "pull_request" ]; then
+              APPIMAGE_NAME="PlotJuggler-pr${{ github.event.pull_request.number }}-${{ matrix.arch }}.AppImage"
+            elif [ "${{ startsWith(github.ref, 'refs/tags/') }}" = "true" ]; then
+              APPIMAGE_NAME="PlotJuggler-${SAFE_REF_NAME}-${{ matrix.arch }}.AppImage"
+            fi
+            mv PlotJuggler-${{ matrix.arch }}.AppImage "${APPIMAGE_NAME}"
+            echo "APPIMAGE_NAME=${APPIMAGE_NAME}" >> "$GITHUB_ENV"
 
       - name: Upload AppImage
         uses: actions/upload-artifact@v7
-        if: startsWith(github.ref, 'refs/tags/')
         with:
-          name: PlotJuggler-${{ github.ref_name }}-${{ matrix.arch }}.AppImage
-          path: PlotJuggler-${{ github.ref_name }}-${{ matrix.arch }}.AppImage
+          name: ${{ env.APPIMAGE_NAME }}
+          path: ${{ env.APPIMAGE_NAME }}
 
       - name: Upload to Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: PlotJuggler-${{ github.ref_name }}-${{ matrix.arch }}.AppImage
+          files: ${{ env.APPIMAGE_NAME }}
           generate_release_notes: true
           fail_on_unmatched_files: false

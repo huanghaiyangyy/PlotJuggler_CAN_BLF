@@ -82,6 +82,40 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path installer\io.plotjuggler.application\data
           Copy-Item -Path build\bin\Release\*.* -Destination installer\io.plotjuggler.application\data -Recurse -Force
+
+          $dataDir = (Resolve-Path "installer\io.plotjuggler.application\data").Path
+          $extraDlls = Get-ChildItem -Path build -Recurse -File -Filter "*.dll" |
+            Where-Object { $_.Name -match '(?i)(dbcppp|vector_blf|libxml2|libxmlmm|zlib|zstd|lz4)' } |
+            Sort-Object -Property FullName -Unique
+
+          foreach ($dll in $extraDlls) {
+            Copy-Item -Path $dll.FullName -Destination $dataDir -Force
+            Write-Host "Copied runtime dependency: $($dll.Name)"
+          }
+
+          $blfPlugin = Get-ChildItem -Path $dataDir -File -Filter "*.dll" |
+            Where-Object { $_.Name -match '(?i)dataloadblf' } |
+            Select-Object -First 1
+          if (-not $blfPlugin) {
+            throw "DataLoadBLF plugin DLL was not found in installer payload directory."
+          }
+
+          $dumpbin = Get-Command dumpbin.exe -ErrorAction SilentlyContinue
+          if ($dumpbin) {
+            $deps = & $dumpbin.Source /DEPENDENTS $blfPlugin.FullName 2>&1
+            $requiresDbcppp = [bool]($deps | Select-String -Pattern '(?i)dbcppp')
+            $requiresVectorBlf = [bool]($deps | Select-String -Pattern '(?i)vector_blf')
+
+            if ($requiresDbcppp -and -not (Get-ChildItem -Path $dataDir -File -Filter "*dbcppp*.dll" -ErrorAction SilentlyContinue)) {
+              throw "DataLoadBLF depends on dbcppp, but no dbcppp DLL is present in installer payload."
+            }
+            if ($requiresVectorBlf -and -not (Get-ChildItem -Path $dataDir -File -Filter "*Vector_BLF*.dll" -ErrorAction SilentlyContinue)) {
+              throw "DataLoadBLF depends on Vector_BLF, but no Vector_BLF DLL is present in installer payload."
+            }
+          } else {
+            Write-Warning "dumpbin.exe was not found; dependency presence check for DataLoadBLF was skipped."
+          }
+
           cmd /c installer\windeploy_pj.bat
 
       - name: Create installer using QT Installation Framework
