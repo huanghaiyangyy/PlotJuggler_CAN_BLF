@@ -131,8 +131,10 @@ bool CustomFunction::xmlLoadState(const QDomElement& parent_element)
 
 SnippetsMap GetSnippetsFromXML(const QString& xml_text)
 {
+  qDebug() << "[DEBUG] GetSnippetsFromXML: input size" << xml_text.size();
   if (xml_text.isEmpty())
   {
+    qDebug() << "[DEBUG] GetSnippetsFromXML: empty input";
     return {};
   }
 
@@ -150,6 +152,7 @@ SnippetsMap GetSnippetsFromXML(const QString& xml_text)
   else
   {
     QDomElement snippets_element = doc.documentElement();
+    qDebug() << "[DEBUG] GetSnippetsFromXML: root element" << snippets_element.tagName();
     return GetSnippetsFromXML(snippets_element);
   }
 }
@@ -157,6 +160,7 @@ SnippetsMap GetSnippetsFromXML(const QString& xml_text)
 SnippetsMap GetSnippetsFromXML(const QDomElement& snippets_element)
 {
   SnippetsMap snippets;
+  int snippet_count = 0;
 
   for (auto elem = snippets_element.firstChildElement("snippet"); !elem.isNull();
        elem = elem.nextSiblingElement("snipp"
@@ -164,7 +168,9 @@ SnippetsMap GetSnippetsFromXML(const QDomElement& snippets_element)
   {
     SnippetData snippet = GetSnippetFromXML(elem);
     snippets.insert({ snippet.alias_name, snippet });
+    snippet_count++;
   }
+  qDebug() << "[DEBUG] GetSnippetsFromXML: parsed snippets" << snippet_count;
   return snippets;
 }
 

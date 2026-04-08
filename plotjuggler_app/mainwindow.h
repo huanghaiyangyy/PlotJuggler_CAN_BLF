@@ -165,7 +165,7 @@ private:
 
   QDateTime _prev_publish_time;
 
-  FunctionEditorWidget* _function_editor;
+  FunctionEditorWidget* _function_editor = nullptr;
 
   QMovie* _animated_streaming_movie;
   QTimer* _animated_streaming_timer;
@@ -250,6 +250,7 @@ private:
   void buildDummyData();
 
   void loadStyleSheet(QString file_path);
+  void ensureFunctionEditorInitialized();
 
   void updateDerivedSeries();
 

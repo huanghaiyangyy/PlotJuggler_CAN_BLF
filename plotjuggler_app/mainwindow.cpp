@@ -92,11 +92,13 @@ MainWindow::MainWindow(const QCommandLineParser& commandline_parser, QWidget* pa
   , _recent_layout_files(new QMenu())
   , _toast_manager(nullptr)
 {
+  qDebug() << "[DEBUG] MainWindow: constructor started";
   QLocale::setDefault(QLocale::c());  // set as default
   setAcceptDrops(true);
 
   _test_option = commandline_parser.isSet("test");
   _autostart_publishers = commandline_parser.isSet("publish");
+  qDebug() << "[DEBUG] MainWindow: commandline options parsed";
 
   if (commandline_parser.isSet("enabled_plugins"))
   {
@@ -118,8 +120,10 @@ MainWindow::MainWindow(const QCommandLineParser& commandline_parser, QWidget* pa
   }
 
   _curvelist_widget = new CurveListPanel(_mapped_plot_data, _transform_functions, this);
+  qDebug() << "[DEBUG] MainWindow: CurveListPanel created";
 
   ui->setupUi(this);
+  qDebug() << "[DEBUG] MainWindow: ui->setupUi completed";
 
   // setupUi() sets the windowTitle so the skin-based setting must be done after
   _skin_path = "://resources/skin";
@@ -227,10 +231,13 @@ MainWindow::MainWindow(const QCommandLineParser& commandline_parser, QWidget* pa
 
   // Initialize toast notification manager
   _toast_manager = new ToastManager(ui->centralWidget);
+  qDebug() << "[DEBUG] MainWindow: ToastManager created";
 
   initializeActions();
+  qDebug() << "[DEBUG] MainWindow: initializeActions completed";
 
   LoadColorMapFromSettings();
+  qDebug() << "[DEBUG] MainWindow: LoadColorMapFromSettings completed";
 
   //------------ Load plugins -------------
   auto plugin_extra_folders =
@@ -242,22 +249,30 @@ MainWindow::MainWindow(const QCommandLineParser& commandline_parser, QWidget* pa
 
   //------------------------------------
 
+  qDebug() << "[DEBUG] MainWindow: loadAllPlugins completed";
+
   _undo_timer.start();
+  qDebug() << "[DEBUG] MainWindow: undo_timer started";
 
   // save initial state
   onUndoableChange();
+  qDebug() << "[DEBUG] MainWindow: onUndoableChange completed";
 
   _replot_timer = new QTimer(this);
   connect(_replot_timer, &QTimer::timeout, this, [this]() { updateDataAndReplot(false); });
+  qDebug() << "[DEBUG] MainWindow: replot_timer created";
 
   _publish_timer = new QTimer(this);
   _publish_timer->setInterval(20);
   connect(_publish_timer, &QTimer::timeout, this, &MainWindow::onPlaybackLoop);
+  qDebug() << "[DEBUG] MainWindow: publish_timer created";
 
   ui->menuFile->setToolTipsVisible(true);
+  qDebug() << "[DEBUG] MainWindow: menuFile setToolTipsVisible";
 
   this->setMenuBar(ui->menuBar);
   ui->menuBar->setNativeMenuBar(false);
+  qDebug() << "[DEBUG] MainWindow: menuBar set";
 
   if (_test_option)
   {
@@ -275,51 +290,68 @@ MainWindow::MainWindow(const QCommandLineParser& commandline_parser, QWidget* pa
     loadLayoutFromFile(commandline_parser.value("layout"));
   }
 
+  qDebug() << "[DEBUG] MainWindow: before restoreGeometry";
   restoreGeometry(settings.value("MainWindow.geometry").toByteArray());
+  qDebug() << "[DEBUG] MainWindow: after restoreGeometry";
   restoreState(settings.value("MainWindow.state").toByteArray());
+  qDebug() << "[DEBUG] MainWindow: after restoreState";
 
   // qDebug() << "restoreGeometry";
 
+  qDebug() << "[DEBUG] MainWindow: before settings UI restore";
   bool activate_grid = settings.value("MainWindow.activateGrid", false).toBool();
   ui->buttonActivateGrid->setChecked(activate_grid);
+  qDebug() << "[DEBUG] MainWindow: activate_grid set";
 
   bool zoom_link_active = settings.value("MainWindow.buttonLink", true).toBool();
   ui->buttonLink->setChecked(zoom_link_active);
+  qDebug() << "[DEBUG] MainWindow: buttonLink set";
 
   bool ration_active = settings.value("MainWindow.buttonRatio", true).toBool();
   ui->buttonRatio->setChecked(ration_active);
+  qDebug() << "[DEBUG] MainWindow: buttonRatio set";
 
   int streaming_buffer_value = settings.value("MainWindow.streamingBufferValue", 5).toInt();
   ui->streamingSpinBox->setValue(streaming_buffer_value);
+  qDebug() << "[DEBUG] MainWindow: streamingSpinBox set";
 
   bool datetime_display = settings.value("MainWindow.dateTimeDisplay", false).toBool();
   ui->buttonUseDateTime->setChecked(datetime_display);
+  qDebug() << "[DEBUG] MainWindow: buttonUseDateTime set";
 
   bool remove_time_offset = settings.value("MainWindow.removeTimeOffset", true).toBool();
   ui->buttonRemoveTimeOffset->setChecked(remove_time_offset);
+  qDebug() << "[DEBUG] MainWindow: buttonRemoveTimeOffset set";
 
   if (settings.value("MainWindow.hiddenFileFrame", false).toBool())
   {
     ui->buttonHideFileFrame->setText("+");
     ui->frameFile->setHidden(true);
   }
+  qDebug() << "[DEBUG] MainWindow: hiddenFileFrame check done";
+
   if (settings.value("MainWindow.hiddenStreamingFrame", false).toBool())
   {
     ui->buttonHideStreamingFrame->setText("+");
     ui->frameStreaming->setHidden(true);
   }
+  qDebug() << "[DEBUG] MainWindow: hiddenStreamingFrame check done";
+
   if (settings.value("MainWindow.hiddenPublishersFrame", false).toBool())
   {
     ui->buttonHidePublishersFrame->setText("+");
     ui->framePublishers->setHidden(true);
   }
+  qDebug() << "[DEBUG] MainWindow: hiddenPublishersFrame check done";
 
   //----------------------------------------------------------
+  qDebug() << "[DEBUG] MainWindow: before tracker icons load";
   QIcon trackerIconA, trackerIconB, trackerIconC;
 
   trackerIconA.addFile(QStringLiteral(":/style_light/line_tracker.png"), QSize(36, 36));
   trackerIconB.addFile(QStringLiteral(":/style_light/line_tracker_1.png"), QSize(36, 36));
   trackerIconC.addFile(QStringLiteral(":/style_light/line_tracker_a.png"), QSize(36, 36));
+  qDebug() << "[DEBUG] MainWindow: tracker icons loaded";
 
   _tracker_button_icons[CurveTracker::LINE_ONLY] = trackerIconA;
   _tracker_button_icons[CurveTracker::VALUE] = trackerIconB;
@@ -328,24 +360,20 @@ MainWindow::MainWindow(const QCommandLineParser& commandline_parser, QWidget* pa
   int tracker_setting =
       settings.value("MainWindow.timeTrackerSetting", (int)CurveTracker::VALUE).toInt();
   _tracker_param = static_cast<CurveTracker::Parameter>(tracker_setting);
+  qDebug() << "[DEBUG] MainWindow: tracker param set";
 
   ui->buttonTimeTracker->setIcon(_tracker_button_icons[_tracker_param]);
+  qDebug() << "[DEBUG] MainWindow: buttonTimeTracker icon set";
 
   forEachWidget([&](PlotWidget* plot) { plot->configureTracker(_tracker_param); });
+  qDebug() << "[DEBUG] MainWindow: forEachWidget configureTracker done";
 
   auto editor_layout = new QVBoxLayout();
   editor_layout->setMargin(0);
   ui->formulaPage->setLayout(editor_layout);
-  _function_editor = new FunctionEditorWidget(_mapped_plot_data, _transform_functions, this);
-  editor_layout->addWidget(_function_editor);
+  qDebug() << "[DEBUG] MainWindow: formulaPage layout set";
 
-  connect(_function_editor, &FunctionEditorWidget::closed, this,
-          [this]() { ui->widgetStack->setCurrentIndex(0); });
-
-  connect(this, &MainWindow::stylesheetChanged, _function_editor,
-          &FunctionEditorWidget::on_stylesheetChanged);
-
-  connect(_function_editor, &FunctionEditorWidget::accept, this, &MainWindow::onCustomPlotCreated);
+  qDebug() << "[DEBUG] MainWindow: FunctionEditorWidget initialization deferred";
 
   QString theme = settings.value("Preferences::theme", "light").toString();
   if (theme != "dark")
@@ -353,10 +381,12 @@ MainWindow::MainWindow(const QCommandLineParser& commandline_parser, QWidget* pa
     theme = "light";
   }
   loadStyleSheet(tr(":/resources/stylesheet_%1.qss").arg(theme));
+  qDebug() << "[DEBUG] MainWindow: loadStyleSheet completed";
 
   // builtin messageParsers
   auto json_parser = std::make_shared<JSON_ParserFactory>();
   _parser_factories.insert({ json_parser->encoding(), json_parser });
+  qDebug() << "[DEBUG] MainWindow: JSON_ParserFactory created";
 
   auto cbor_parser = std::make_shared<CBOR_ParserFactory>();
   _parser_factories.insert({ cbor_parser->encoding(), cbor_parser });
@@ -366,6 +396,7 @@ MainWindow::MainWindow(const QCommandLineParser& commandline_parser, QWidget* pa
 
   auto msgpack = std::make_shared<MessagePack_ParserFactory>();
   _parser_factories.insert({ msgpack->encoding(), msgpack });
+  qDebug() << "[DEBUG] MainWindow: builtin parsers created";
 
   if (!_default_streamer.isEmpty())
   {
@@ -376,6 +407,8 @@ MainWindow::MainWindow(const QCommandLineParser& commandline_parser, QWidget* pa
       settings.setValue("MainWindow.previousStreamingPlugin", _default_streamer);
     }
   }
+
+  qDebug() << "[DEBUG] MainWindow: constructor completed successfully";
 }
 
 MainWindow::~MainWindow()
@@ -384,6 +417,39 @@ MainWindow::~MainWindow()
   _mapped_plot_data.user_defined.clear();
 
   delete ui;
+}
+
+void MainWindow::ensureFunctionEditorInitialized()
+{
+  if (_function_editor)
+  {
+    return;
+  }
+
+  auto editor_layout = qobject_cast<QVBoxLayout*>(ui->formulaPage->layout());
+  if (!editor_layout)
+  {
+    editor_layout = new QVBoxLayout();
+    editor_layout->setMargin(0);
+    ui->formulaPage->setLayout(editor_layout);
+    qDebug() << "[DEBUG] MainWindow: formulaPage layout recreated";
+  }
+
+  qDebug() << "[DEBUG] MainWindow: before creating FunctionEditorWidget";
+  _function_editor = new FunctionEditorWidget(_mapped_plot_data, _transform_functions, this);
+  qDebug() << "[DEBUG] MainWindow: after creating FunctionEditorWidget";
+
+  editor_layout->addWidget(_function_editor);
+  qDebug() << "[DEBUG] MainWindow: FunctionEditorWidget added to layout";
+
+  connect(_function_editor, &FunctionEditorWidget::closed, this,
+          [this]() { ui->widgetStack->setCurrentIndex(0); });
+
+  connect(this, &MainWindow::stylesheetChanged, _function_editor,
+          &FunctionEditorWidget::on_stylesheetChanged);
+
+  connect(_function_editor, &FunctionEditorWidget::accept, this, &MainWindow::onCustomPlotCreated);
+  qDebug() << "[DEBUG] MainWindow: FunctionEditorWidget signals connected";
 }
 
 void MainWindow::onUndoableChange()
@@ -2878,6 +2944,7 @@ void MainWindow::closeEvent(QCloseEvent* event)
 
 void MainWindow::onAddCustomPlot(const std::string& plot_name)
 {
+  ensureFunctionEditorInitialized();
   ui->widgetStack->setCurrentIndex(1);
   _function_editor->setLinkedPlotName(QString::fromStdString(plot_name));
   _function_editor->createNewPlot();
@@ -2885,6 +2952,7 @@ void MainWindow::onAddCustomPlot(const std::string& plot_name)
 
 void MainWindow::onEditCustomPlot(const std::string& plot_name)
 {
+  ensureFunctionEditorInitialized();
   ui->widgetStack->setCurrentIndex(1);
   auto custom_it = _transform_functions.find(plot_name);
   if (custom_it == _transform_functions.end())
@@ -3002,7 +3070,10 @@ void MainWindow::onCustomPlotCreated(std::vector<CustomPlotPtr> custom_plots)
 
   onUpdateLeftTableValues();
   ui->widgetStack->setCurrentIndex(0);
-  _function_editor->clear();
+  if (_function_editor)
+  {
+    _function_editor->clear();
+  }
 
   for (auto plot : widget_to_replot)
   {

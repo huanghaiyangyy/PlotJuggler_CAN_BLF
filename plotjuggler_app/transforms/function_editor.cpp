@@ -60,22 +60,29 @@ FunctionEditorWidget::FunctionEditorWidget(PlotDataMapRef& plotMapData,
   , _v_count(1)
   , _preview_widget(new PlotWidget(_local_plot_data, this))
 {
+  qDebug() << "[DEBUG] FunctionEditorWidget: constructor started";
+
   ui->setupUi(this);
+  qDebug() << "[DEBUG] FunctionEditorWidget: setupUi completed";
 
   ui->globalVarsText->setHighlighter(new QLuaHighlighter);
   ui->globalVarsTextBatch->setHighlighter(new QLuaHighlighter);
+  qDebug() << "[DEBUG] FunctionEditorWidget: globalVarsText highlighter set";
 
   ui->functionText->setHighlighter(new QLuaHighlighter);
   ui->functionTextBatch->setHighlighter(new QLuaHighlighter);
+  qDebug() << "[DEBUG] FunctionEditorWidget: functionText highlighter set";
 
   lua_completer_ = new QLuaCompleter(this);
   lua_completer_batch_ = new QLuaCompleter(this);
+  qDebug() << "[DEBUG] FunctionEditorWidget: LuaCompleter created";
 
   ui->globalVarsText->setCompleter(lua_completer_);
   ui->globalVarsTextBatch->setCompleter(lua_completer_);
 
   ui->functionText->setCompleter(lua_completer_batch_);
   ui->functionTextBatch->setCompleter(lua_completer_batch_);
+  qDebug() << "[DEBUG] FunctionEditorWidget: Completer set";
 
   QSettings settings;
 
@@ -89,9 +96,11 @@ FunctionEditorWidget::FunctionEditorWidget(PlotDataMapRef& plotMapData,
   ui->globalVarsTextBatch->setFont(fixedFont);
   ui->functionTextBatch->setFont(fixedFont);
   ui->snippetPreview->setFont(fixedFont);
+  qDebug() << "[DEBUG] FunctionEditorWidget: Fonts set";
 
   auto theme = settings.value("StyleSheet::theme", "light").toString();
   on_stylesheetChanged(theme);
+  qDebug() << "[DEBUG] FunctionEditorWidget: Stylesheet changed";
 
   QPalette palette = ui->listAdditionalSources->palette();
   palette.setBrush(QPalette::Highlight, palette.brush(QPalette::Base));
@@ -105,19 +114,25 @@ FunctionEditorWidget::FunctionEditorWidget(PlotDataMapRef& plotMapData,
     numericPlotNames.push_back(name);
   }
   numericPlotNames.sort(Qt::CaseInsensitive);
+  qDebug() << "[DEBUG] FunctionEditorWidget: numericPlotNames collected";
 
   QByteArray saved_xml =
       settings.value("FunctionEditorWidget.recentSnippetsXML", QByteArray()).toByteArray();
   restoreGeometry(settings.value("FunctionEditorWidget.geometry").toByteArray());
+  qDebug() << "[DEBUG] FunctionEditorWidget: Geometry restored";
 
   QByteArray default_xml;
   {
+    qDebug() << "[DEBUG] FunctionEditorWidget: loading default.snippets.xml";
     QFile file("://resources/default.snippets.xml");
     if (!file.open(QIODevice::ReadOnly))
     {
+      qCritical() << "[DEBUG] FunctionEditorWidget: FAILED to open default.snippets.xml";
       throw std::runtime_error("problem with default.snippets.xml");
     }
     default_xml = file.readAll();
+    file.close();
+    qDebug() << "[DEBUG] FunctionEditorWidget: default.snippets.xml loaded, size:" << default_xml.size();
   }
 
   if (saved_xml.isEmpty())
@@ -230,6 +245,8 @@ FunctionEditorWidget::FunctionEditorWidget(PlotDataMapRef& plotMapData,
 
   bool use_batch_prefix = settings.value("FunctionEditorWidget.batchPrefix", false).toBool();
   ui->radioButtonPrefix->setChecked(use_batch_prefix);
+
+  qDebug() << "[DEBUG] FunctionEditorWidget: constructor completed successfully";
 }
 
 void FunctionEditorWidget::saveSettings()
@@ -403,14 +420,18 @@ bool FunctionEditorWidget::eventFilter(QObject* obj, QEvent* ev)
 
 void FunctionEditorWidget::importSnippets(const QByteArray& xml_text)
 {
+  qDebug() << "[DEBUG] FunctionEditorWidget: importSnippets start, size:" << xml_text.size();
   ui->snippetsListSaved->clear();
+  qDebug() << "[DEBUG] FunctionEditorWidget: snippetsListSaved cleared";
 
   _snipped_saved = GetSnippetsFromXML(xml_text);
+  qDebug() << "[DEBUG] FunctionEditorWidget: parsed saved snippets count:" << _snipped_saved.size();
 
   for (const auto& it : _snipped_saved)
   {
     ui->snippetsListSaved->addItem(it.first);
   }
+  qDebug() << "[DEBUG] FunctionEditorWidget: snippet names added to list";
 
   for (const auto& custom_it : _transform_maps)
   {
@@ -430,7 +451,9 @@ void FunctionEditorWidget::importSnippets(const QByteArray& xml_text)
     snippet.global_vars = math_plot->snippet().global_vars;
     snippet.function = math_plot->snippet().function;
   }
+  qDebug() << "[DEBUG] FunctionEditorWidget: custom transform snippets inspected";
   ui->snippetsListSaved->sortItems();
+  qDebug() << "[DEBUG] FunctionEditorWidget: snippetsListSaved sorted";
 }
 
 QByteArray FunctionEditorWidget::exportSnippets() const
