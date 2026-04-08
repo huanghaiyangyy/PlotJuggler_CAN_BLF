@@ -45,13 +45,6 @@ bool BlfDecoderPipeline::ProcessFrame(const NormalizedCanFrame& frame)
     return false;
   }
 
-  // When decoded mode is active, channel-to-DBC mapping acts as a channel filter:
-  // channels without bindings are skipped entirely (no raw fallback/output).
-  if (config_.emit_decoded && dbc_manager_ && !dbc_manager_->HasBinding(frame.channel))
-  {
-    return true;
-  }
-
   const double timestamp = ResolveTimestamp(frame);
   bool wrote_raw = false;
 
