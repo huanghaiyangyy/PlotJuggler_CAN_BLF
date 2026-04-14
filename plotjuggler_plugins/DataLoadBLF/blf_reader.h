@@ -27,6 +27,8 @@ struct BlfReadProgress
 
 bool IsPlausibleUnixEpochSeconds(double seconds);
 qint64 UnixEpochSecondsToMsec(double seconds, bool* ok);
+double ResolveAbsoluteTimestampSeconds(double seconds, qint64 measurement_start_msec,
+                                       bool has_measurement_start);
 int ComputeBlfReadPercentage(uint32_t current_object, uint32_t total_objects);
 
 class BlfReader

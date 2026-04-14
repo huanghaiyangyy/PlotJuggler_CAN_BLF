@@ -2,6 +2,13 @@
 Changelog for package plotjuggler
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+3.17.4 (2026-04-14)
+-----------
+* Inherit all features introduced in 3.17.0, including built-in `DataLoadBLF` support and CI packaging updates.
+* Fix BLF absolute timestamp reconstruction: when frame timestamps are relative values, use `measurementStartTime` to rebuild Unix epoch seconds.
+* Fix UTC date-time display for BLF logs, avoiding `1970-01-01` fallback when relative timestamps are present.
+* Add regression tests for absolute/relative BLF timestamp resolution behavior.
+
 3.17.0 (2026-04-08)
 -----------
 
