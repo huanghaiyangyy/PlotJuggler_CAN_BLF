@@ -8,6 +8,7 @@
 #include <limits>
 
 #include <QDebug>
+#include <QDateTime>
 
 #if defined(PJ_HAS_VECTOR_BLF) && PJ_HAS_VECTOR_BLF
 #if __has_include(<Vector/BLF/CanFdMessage64.h>) && __has_include(<Vector/BLF/CanMessage.h>) && \
@@ -187,6 +188,31 @@ NormalizedCanFrame ToFrame(const Vector::BLF::CanFdMessage& msg)
   return frame;
 }
 #endif
+
+bool SystemTimeToLocalEpochMsec(const Vector::BLF::SYSTEMTIME& system_time, qint64* out_msec)
+{
+  if (out_msec == nullptr)
+  {
+    return false;
+  }
+
+  const QDate date(system_time.year, system_time.month, system_time.day);
+  const QTime time(system_time.hour, system_time.minute, system_time.second,
+                   system_time.milliseconds);
+  if (!date.isValid() || !time.isValid())
+  {
+    return false;
+  }
+
+  const QDateTime local_datetime(date, time, Qt::LocalTime);
+  if (!local_datetime.isValid())
+  {
+    return false;
+  }
+
+  *out_msec = local_datetime.toMSecsSinceEpoch();
+  return true;
+}
 #endif
 
 }  // namespace
@@ -210,6 +236,34 @@ qint64 UnixEpochSecondsToMsec(double seconds, bool* ok)
     return 0;
   }
   return static_cast<qint64>(seconds * 1000.0);
+}
+
+double ResolveAbsoluteTimestampSeconds(double seconds, qint64 measurement_start_msec,
+                                       bool has_measurement_start)
+{
+  if (!std::isfinite(seconds))
+  {
+    return seconds;
+  }
+
+  if (IsPlausibleUnixEpochSeconds(seconds))
+  {
+    return seconds;
+  }
+
+  if (!has_measurement_start)
+  {
+    return seconds;
+  }
+
+  const double reconstructed_seconds =
+      static_cast<double>(measurement_start_msec) / 1000.0 + seconds;
+  if (IsPlausibleUnixEpochSeconds(reconstructed_seconds))
+  {
+    return reconstructed_seconds;
+  }
+
+  return seconds;
 }
 
 int ComputeBlfReadPercentage(uint32_t current_object, uint32_t total_objects)
@@ -254,6 +308,10 @@ bool BlfReader::ReadFrames(const QString& path,
     }
 
     const uint32_t total_objects = file.fileStatistics.objectCount;
+    qint64 measurement_start_msec = 0;
+    const bool has_measurement_start = SystemTimeToLocalEpochMsec(
+        file.fileStatistics.measurementStartTime, &measurement_start_msec);
+
     auto report_progress = [&]() -> bool {
       if (!on_progress)
       {
@@ -264,6 +322,35 @@ bool BlfReader::ReadFrames(const QString& path,
       progress.total_objects = total_objects;
       progress.percentage = ComputeBlfReadPercentage(progress.current_object, progress.total_objects);
       return on_progress(progress);
+    };
+
+    auto emit_frame = [&](NormalizedCanFrame frame) -> bool {
+      frame.timestamp = ResolveAbsoluteTimestampSeconds(frame.timestamp, measurement_start_msec,
+                                                        has_measurement_start);
+
+      if (metadata && !metadata->has_valid_absolute_time)
+      {
+        bool ok = false;
+        const qint64 absolute_time_msec = UnixEpochSecondsToMsec(frame.timestamp, &ok);
+        if (ok)
+        {
+          metadata->first_absolute_time_msec = absolute_time_msec;
+          metadata->has_valid_absolute_time = true;
+        }
+      }
+
+      if (on_frame)
+      {
+        on_frame(frame);
+      }
+
+      if (!report_progress())
+      {
+        error = "BLF loading cancelled";
+        file.close();
+        return false;
+      }
+      return true;
     };
 
     if (!report_progress())
@@ -283,25 +370,8 @@ bool BlfReader::ReadFrames(const QString& path,
 
       if (const auto* msg = dynamic_cast<const Vector::BLF::CanMessage2*>(object.get()))
       {
-        const auto frame = ToFrame(*msg);
-        if (metadata && !metadata->has_valid_absolute_time)
+        if (!emit_frame(ToFrame(*msg)))
         {
-          bool ok = false;
-          const qint64 absolute_time_msec = UnixEpochSecondsToMsec(frame.timestamp, &ok);
-          if (ok)
-          {
-            metadata->first_absolute_time_msec = absolute_time_msec;
-            metadata->has_valid_absolute_time = true;
-          }
-        }
-        if (on_frame)
-        {
-          on_frame(frame);
-        }
-        if (!report_progress())
-        {
-          error = "BLF loading cancelled";
-          file.close();
           return false;
         }
         continue;
@@ -309,25 +379,8 @@ bool BlfReader::ReadFrames(const QString& path,
 
       if (const auto* msg = dynamic_cast<const Vector::BLF::CanFdMessage64*>(object.get()))
       {
-        const auto frame = ToFrame(*msg);
-        if (metadata && !metadata->has_valid_absolute_time)
+        if (!emit_frame(ToFrame(*msg)))
         {
-          bool ok = false;
-          const qint64 absolute_time_msec = UnixEpochSecondsToMsec(frame.timestamp, &ok);
-          if (ok)
-          {
-            metadata->first_absolute_time_msec = absolute_time_msec;
-            metadata->has_valid_absolute_time = true;
-          }
-        }
-        if (on_frame)
-        {
-          on_frame(frame);
-        }
-        if (!report_progress())
-        {
-          error = "BLF loading cancelled";
-          file.close();
           return false;
         }
         continue;
@@ -336,25 +389,8 @@ bool BlfReader::ReadFrames(const QString& path,
 #if PJ_CAN_HAS_CANFD_MESSAGE
       if (const auto* msg = dynamic_cast<const Vector::BLF::CanFdMessage*>(object.get()))
       {
-        const auto frame = ToFrame(*msg);
-        if (metadata && !metadata->has_valid_absolute_time)
+        if (!emit_frame(ToFrame(*msg)))
         {
-          bool ok = false;
-          const qint64 absolute_time_msec = UnixEpochSecondsToMsec(frame.timestamp, &ok);
-          if (ok)
-          {
-            metadata->first_absolute_time_msec = absolute_time_msec;
-            metadata->has_valid_absolute_time = true;
-          }
-        }
-        if (on_frame)
-        {
-          on_frame(frame);
-        }
-        if (!report_progress())
-        {
-          error = "BLF loading cancelled";
-          file.close();
           return false;
         }
         continue;
@@ -363,25 +399,8 @@ bool BlfReader::ReadFrames(const QString& path,
 
       if (const auto* msg = dynamic_cast<const Vector::BLF::CanMessage*>(object.get()))
       {
-        const auto frame = ToFrame(*msg);
-        if (metadata && !metadata->has_valid_absolute_time)
+        if (!emit_frame(ToFrame(*msg)))
         {
-          bool ok = false;
-          const qint64 absolute_time_msec = UnixEpochSecondsToMsec(frame.timestamp, &ok);
-          if (ok)
-          {
-            metadata->first_absolute_time_msec = absolute_time_msec;
-            metadata->has_valid_absolute_time = true;
-          }
-        }
-        if (on_frame)
-        {
-          on_frame(frame);
-        }
-        if (!report_progress())
-        {
-          error = "BLF loading cancelled";
-          file.close();
           return false;
         }
       }

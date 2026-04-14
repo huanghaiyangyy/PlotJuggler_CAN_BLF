@@ -36,4 +36,29 @@ TEST(BlfReaderTime, ComputesProgressPercentageSafely)
   EXPECT_EQ(ComputeBlfReadPercentage(150, 100), 100);
 }
 
+TEST(BlfReaderTime, KeepsAbsoluteEpochTimestampUnchanged)
+{
+  constexpr double kAbsoluteSeconds = 1765440264.297601;
+  EXPECT_DOUBLE_EQ(
+      ResolveAbsoluteTimestampSeconds(kAbsoluteSeconds, 1765440264297LL, true),
+      kAbsoluteSeconds);
+}
+
+TEST(BlfReaderTime, ReconstructsAbsoluteTimeFromMeasurementStartWhenRelative)
+{
+  constexpr qint64 kMeasurementStartMsec = 1765440264297LL;
+  constexpr double kRelativeSeconds = 0.000601;
+  constexpr double kExpectedSeconds = 1765440264.297601;
+  EXPECT_DOUBLE_EQ(
+      ResolveAbsoluteTimestampSeconds(kRelativeSeconds, kMeasurementStartMsec, true),
+      kExpectedSeconds);
+}
+
+TEST(BlfReaderTime, KeepsRelativeTimestampWhenMeasurementStartUnavailable)
+{
+  constexpr double kRelativeSeconds = 0.000601;
+  EXPECT_DOUBLE_EQ(ResolveAbsoluteTimestampSeconds(kRelativeSeconds, 0, false),
+                   kRelativeSeconds);
+}
+
 }  // namespace PJ::BLF
