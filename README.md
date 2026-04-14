@@ -9,19 +9,63 @@
 
 ## Fork Modifications (huanghaiyangyy)
 
-This fork adds local features and workflow updates focused on CAN/BLF analysis and local delivery.
+### Upstream README Reference
 
-- Added built-in `DataLoadBLF` capabilities for CAN/CAN FD loading with DBC decode support and raw-byte fallback for undecoded messages.
-- Added BLF-oriented UI/interaction updates, including data header summary, signal tree behavior tuning, timestamp display fixes, and plot interaction enhancements.
-- Added built-in Lua snippets for single-signal filtering:
-  - `01_ax_mv_avg_flt`
-  - `02_delta_v_from_speed`
-  - `03_dvx_mv_avg`
-  - `04_dvx_low_pass`
-- Added snippet migration logic to preserve older local snippet names while moving to the new prefixed names.
-- Added local dev/dist workspace migration and packaging flow for Ubuntu 20.04 delivery.
+- Original PlotJuggler README:
+  https://github.com/facontidavide/PlotJuggler/blob/main/README.md
 
-Design and implementation references are tracked in:
+### Release Notes (3.17.3)
+
+#### 新功能
+
+##### DataLoadBLF - CAN/CAN FD 数据加载
+- 支持加载 CAN/CAN FD 数据（BLF 格式）
+- 可通过 DBC 文件解析信号
+- 未解析消息自动回退为原始字节显示
+
+##### 界面/交互优化
+- 数据头摘要显示
+- 信号树行为调整
+- 时间戳显示修复
+- 绘图交互增强
+
+##### 内置 Lua 代码片段
+单信号处理滤波（车速/IMU加速度信号处理）：
+- `01_ax_mv_avg_flt`（轴移动平均滤波）
+- `02_delta_v_from_speed`（由车速计算速度差）
+- `03_dvx_mv_avg`（Delta_Vx 移动平均）
+- `04_dvx_low_pass`（Delta_Vx 低通滤波）
+
+##### 开发/发布流程
+- 本地开发/发布工作区迁移及打包流程
+- 适配 Ubuntu 20.04 交付
+
+#### 性能优化
+- BLF 加载性能优化：通过缓存序列写入、过滤未映射通道实现提速
+
+#### Bug 修复
+- 修复 Ubuntu AppImage 中 DBC 加载失败问题（dbcppp 库链接问题）
+
+#### 系统要求
+- Windows: 若主窗口无法打开，请安装最新版微软 Visual C++ 运行库：
+  https://learn.microsoft.com/zh-cn/cpp/windows/latest-supported-vc-redist?view=msvc-170
+
+#### Patch Notes (3.17.2 -> 3.17.3)
+- Fixed Ubuntu AppImage BLF parsing regression where only one frame/message could be parsed for logs containing unknown BLF object types.
+- Pinned `vector_blf` to upstream commit `3512fc2ddca43248c95b773905d9c3ba46bc6570` (includes unknown-object skip fix) to align CI artifacts with locally validated behavior.
+
+#### Release Note Style and Compare Links
+- This patch release inherits the previous release-note style and keeps a full compare link.
+- **Full Changelog**: https://github.com/huanghaiyangyy/PlotJuggler_CAN_BLF/compare/3.17.1...3.17.2
+- **Full Changelog**: https://github.com/huanghaiyangyy/PlotJuggler_CAN_BLF/compare/3.17.2...3.17.3
+
+#### What's Changed
+- [codex] fix CI BLF/dbcppp packaging and checks by @huanghaiyangyy in https://github.com/huanghaiyangyy/PlotJuggler_CAN_BLF/pull/3
+
+#### New Contributors
+- @huanghaiyangyy made their first contribution in https://github.com/huanghaiyangyy/PlotJuggler_CAN_BLF/pull/3
+
+Design and implementation references:
 
 - `docs/superpowers/specs/2026-03-28-canfd-blf-dataloader-design.md`
 - `docs/superpowers/specs/2026-03-29-plotjuggler-blf-ui-interactions-design.md`
