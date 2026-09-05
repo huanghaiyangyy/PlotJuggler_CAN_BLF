@@ -145,6 +145,19 @@ function(find_or_download_dbcppp)
 
   cpmaddpackage(${_dbcppp_cpm_args})
 
+  # GCC 14+: dbcppp sources often miss <algorithm> for std::find/find_if.
+  if(DEFINED dbcppp_SOURCE_DIR AND EXISTS "${dbcppp_SOURCE_DIR}/src/libdbcppp")
+    file(GLOB _pj_dbcppp_srcs "${dbcppp_SOURCE_DIR}/src/libdbcppp/*.cpp")
+    foreach(_src IN LISTS _pj_dbcppp_srcs)
+      file(READ "${_src}" _pj_dbcppp_content)
+      string(FIND "${_pj_dbcppp_content}" "#include <algorithm>" _pj_has_algo)
+      if(_pj_has_algo EQUAL -1)
+        string(REGEX REPLACE "(#include[^\n]*\n)" "\\1#include <algorithm>\n" _pj_dbcppp_content "${_pj_dbcppp_content}")
+        file(WRITE "${_src}" "${_pj_dbcppp_content}")
+      endif()
+    endforeach()
+  endif()
+
   if(TARGET dbcppp::dbcppp)
     _pj_patch_dbcppp_target_includes_if_missing(dbcppp::dbcppp)
     set(DBCPPP_FOUND TRUE PARENT_SCOPE)

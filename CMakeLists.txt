@@ -4,6 +4,7 @@ project(
   plotjuggler
   LANGUAGES C CXX
   VERSION 3.17.4)
+enable_language(ASM)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -24,6 +25,7 @@ option(BASE_AS_SHARED "Build the base library as a shared library" OFF)
 option(BUILDING_WITH_CONAN "Using Conan for dependencies" OFF)
 option(PJ_ENABLE_VECTOR_BLF "Enable vector_blf dependency for BLF loading" ON)
 option(PJ_ENABLE_DBCPPP "Enable dbcppp dependency for BLF DBC decoding" ON)
+option(PJ_ENABLE_VECTOR_JCAN "Enable VN1640A jcan DataStreamer (Linux)" ON)
 option(PJ_ENABLE_PARSER_PROTOBUF "Enable Protobuf parser plugin" ON)
 set(PJ_INSTALLATION "undefined" CACHE STRING "Installation type")
 set(PJ_PLUGINS_DIRECTORY "lib/plotjuggler/plugins" CACHE STRING "Plugins directory")
