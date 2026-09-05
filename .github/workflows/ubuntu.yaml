@@ -85,11 +85,16 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
+          SUDO=""
+          if command -v sudo >/dev/null 2>&1 && [ "$(id -u)" -ne 0 ]; then
+            SUDO="sudo"
+          fi
           # Ubuntu 20.04 ships CMake 3.16, which does not know CMAKE_CXX_STANDARD 23.
           CMAKE_VER=3.31.8
-          curl -fsSL "https://github.com/Kitware/CMake/releases/download/v${CMAKE_VER}/cmake-${CMAKE_VER}-linux-x86_64.tar.gz"             -o /tmp/cmake.tgz
-          sudo mkdir -p /opt/cmake
-          sudo tar -xzf /tmp/cmake.tgz -C /opt/cmake --strip-components=1
+          curl -fsSL "https://github.com/Kitware/CMake/releases/download/v${CMAKE_VER}/cmake-${CMAKE_VER}-linux-x86_64.tar.gz" \
+            -o /tmp/cmake.tgz
+          ${SUDO} mkdir -p /opt/cmake
+          ${SUDO} tar -xzf /tmp/cmake.tgz -C /opt/cmake --strip-components=1
           echo "/opt/cmake/bin" >> "$GITHUB_PATH"
           /opt/cmake/bin/cmake --version
 
