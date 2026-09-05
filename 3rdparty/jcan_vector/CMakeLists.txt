@@ -33,6 +33,8 @@ target_include_directories(jcan_vector
 
 target_compile_features(jcan_vector PUBLIC cxx_std_17)
 set_target_properties(jcan_vector PROPERTIES CXX_STANDARD 23 CXX_STANDARD_REQUIRED ON)
+# CMake < 3.20 may ignore CXX_STANDARD 23; force the dialect for g++/clang.
+target_compile_options(jcan_vector PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-std=c++23>)
 
 target_compile_definitions(jcan_vector PUBLIC JCAN_HAS_VECTOR=1)
 target_link_libraries(jcan_vector PUBLIC PkgConfig::LIBUSB)
