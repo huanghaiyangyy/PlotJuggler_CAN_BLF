@@ -44,9 +44,15 @@ jobs:
           ${SUDO} apt-get update
           ${SUDO} apt-get install -y -V --no-install-recommends \
             build-essential cmake pkg-config git ccache software-properties-common \
+            gnupg \
             qtbase5-dev libqt5svg5-dev libqt5websockets5-dev libqt5opengl5-dev \
             libqt5x11extras5-dev libprotoc-dev libmosquitto-dev ca-certificates \
-            lsb-release wget libcurl4-openssl-dev file
+            lsb-release wget curl libcurl4-openssl-dev file \
+            libusb-1.0-0-dev
+          # g++-9 on ubuntu:20.04 lacks C++23 (<expected>); install g++-13 for jcan_vector
+          ${SUDO} add-apt-repository -y ppa:ubuntu-toolchain-r/test
+          ${SUDO} apt-get update
+          ${SUDO} apt-get install -y -V --no-install-recommends g++-13 gcc-13
 
       - name: Install Apache Arrow for Parquet support
         shell: bash
@@ -75,6 +81,23 @@ jobs:
           path: ${{ runner.temp }}/ccache
           key: ${{ runner.os }}-${{ matrix.ubuntu-distro }}
 
+      - name: Install CMake 3.31 (CXX23 dialect support)
+        shell: bash
+        run: |
+          set -euxo pipefail
+          SUDO=""
+          if command -v sudo >/dev/null 2>&1 && [ "$(id -u)" -ne 0 ]; then
+            SUDO="sudo"
+          fi
+          # Ubuntu 20.04 ships CMake 3.16, which does not know CMAKE_CXX_STANDARD 23.
+          CMAKE_VER=3.31.8
+          curl -fsSL "https://github.com/Kitware/CMake/releases/download/v${CMAKE_VER}/cmake-${CMAKE_VER}-linux-x86_64.tar.gz" \
+            -o /tmp/cmake.tgz
+          ${SUDO} mkdir -p /opt/cmake
+          ${SUDO} tar -xzf /tmp/cmake.tgz -C /opt/cmake --strip-components=1
+          echo "/opt/cmake/bin" >> "$GITHUB_PATH"
+          /opt/cmake/bin/cmake --version
+
       - name: Build Plotjuggler
         shell: bash
         working-directory: ${{ github.workspace }}
@@ -86,16 +109,20 @@ jobs:
             if command -v sudo >/dev/null 2>&1; then
               SUDO="sudo"
             fi
+            export PATH="/opt/cmake/bin:${PATH}"
             if ! command -v cmake >/dev/null 2>&1 || ! command -v git >/dev/null 2>&1; then
               export DEBIAN_FRONTEND=noninteractive
               export TZ=Etc/UTC
               ${SUDO} apt-get update
               ${SUDO} apt-get install -y -V --no-install-recommends build-essential cmake pkg-config git
             fi
+            cmake --version
             mkdir -p build
+            export CC=gcc-13 CXX=g++-13
             if ! cmake . -B build -DCMAKE_BUILD_TYPE=Release -DPJ_INSTALLATION="appimage" \
               -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
               -DPJ_ENABLE_VECTOR_BLF=ON -DPJ_ENABLE_DBCPPP=ON \
+              -DPJ_ENABLE_VECTOR_JCAN=ON \
               -DPJ_ENABLE_PARSER_PROTOBUF=OFF \
               -DPJ_PLUGINS_DIRECTORY="bin" 2>&1 | tee build/configure.log; then
               tail="$(tail -n 120 build/configure.log)"
@@ -133,6 +160,11 @@ jobs:
             fi
             if strings build/bin/libDataLoadBLF.so | grep -q "dbcppp support is not available in this build"; then
               echo "::error title=DBC support disabled::libDataLoadBLF.so contains fallback 'dbcppp support is not available in this build'"
+              exit 1
+            fi
+
+            if [ ! -f build/bin/libDataStreamVectorJcan.so ]; then
+              echo "::error title=Vector JCAN plugin missing::build/bin/libDataStreamVectorJcan.so was not produced"
               exit 1
             fi
 
