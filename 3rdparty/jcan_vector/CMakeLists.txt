@@ -1,6 +1,9 @@
 # Vendored Vector VN1640A stack extracted from ImArjunJ/jcan (MIT).
 # Linux-only. Requires libusb-1.0 and a C++23 compiler for the implementation TU.
 
+cmake_minimum_required(VERSION 3.16)
+project(jcan_vector LANGUAGES C CXX ASM)
+
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBUSB REQUIRED IMPORTED_TARGET libusb-1.0)
 
@@ -29,13 +32,11 @@ target_include_directories(jcan_vector
 )
 
 target_compile_features(jcan_vector PUBLIC cxx_std_17)
-# Implementation + vendored hardware_vector.hpp need C++23 (std::expected / format)
 set_target_properties(jcan_vector PROPERTIES CXX_STANDARD 23 CXX_STANDARD_REQUIRED ON)
 
 target_compile_definitions(jcan_vector PUBLIC JCAN_HAS_VECTOR=1)
 target_link_libraries(jcan_vector PUBLIC PkgConfig::LIBUSB)
 
-# tiny CLI smoke tool (optional)
 option(JCAN_VECTOR_BUILD_DEMO "Build jcan_vector_list demo" ON)
 if(JCAN_VECTOR_BUILD_DEMO)
   add_executable(jcan_vector_list src/demo_list.cpp)

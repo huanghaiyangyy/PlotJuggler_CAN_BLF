@@ -4,6 +4,7 @@ project(
   plotjuggler
   LANGUAGES C CXX
   VERSION 3.17.4)
+enable_language(ASM)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
