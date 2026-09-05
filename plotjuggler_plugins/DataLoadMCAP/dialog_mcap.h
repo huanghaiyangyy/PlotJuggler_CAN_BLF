@@ -2,6 +2,7 @@
 #define DIALOG_MCAP_H
 
 #include <memory>
+#include <unordered_map>
 #include <QDialog>
 #include <optional>
 #include "dataload_params.h"
