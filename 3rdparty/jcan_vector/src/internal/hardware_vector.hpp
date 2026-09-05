@@ -136,6 +136,8 @@ namespace jcan
 
         std::vector<uint8_t> rx_partial_;
         uint16_t rx_partial_expected_{0};
+        std::vector<uint8_t> activated_channels_;
+        slcan_bitrate last_bitrate_{slcan_bitrate::s6};
 
         static bool debug()
         {
@@ -324,7 +326,9 @@ namespace jcan
             if (!open_)
                 return std::unexpected(error_code::not_open);
 
-            (void) cmd_deactivate_channel(channel_);
+            for (uint8_t ch : activated_channels_)
+                (void) cmd_deactivate_channel(ch);
+            activated_channels_.clear();
 
             libusb_release_interface(dev_, 0);
             libusb_close(dev_);
@@ -335,6 +339,63 @@ namespace jcan
             rx_partial_.clear();
             if (debug())
                 std::fprintf(stderr, "[vector] closed\n");
+            return {};
+        }
+
+        /** Activate an extra CAN channel with the same arbitration bitrate as primary. */
+        [[nodiscard]] result<> activate_additional_channel(uint8_t channel, slcan_bitrate bitrate)
+        {
+            if (!open_)
+                return std::unexpected(error_code::not_open);
+
+            for (uint8_t ch : activated_channels_)
+            {
+                if (ch == channel)
+                    return {};
+            }
+
+            static constexpr uint32_t bitrate_bps_map[] = {
+                10000, 20000, 50000, 100000, 125000, 250000, 500000, 800000, 1000000,
+            };
+            uint32_t br_bps = bitrate_bps_map[static_cast<unsigned>(bitrate) % (sizeof(bitrate_bps_map) / sizeof(bitrate_bps_map[0]))];
+
+            if (core_clock_hz_ == 0)
+            {
+                if (debug())
+                    std::fprintf(stderr, "[vector] WARNING: core clock unknown, using 160 MHz\n");
+                core_clock_hz_ = 160'000'000;
+            }
+            auto timing = compute_can_timing(core_clock_hz_, br_bps);
+
+            if (auto r = cmd_set_output_mode(channel, vector::OUTPUT_MODE_NORMAL); !r)
+            {
+                if (debug())
+                    std::fprintf(stderr, "[vector] set_output_mode ch%u failed\n", channel);
+                return r;
+            }
+            if (auto r = cmd_set_chip_param(channel, timing); !r)
+            {
+                if (debug())
+                    std::fprintf(stderr, "[vector] set_chip_param ch%u failed\n", channel);
+                return r;
+            }
+            if (auto r = cmd_set_transceiver_mode(channel, vector::TRANSCEIVER_MODE_NORMAL); !r)
+            {
+                if (debug())
+                    std::fprintf(stderr, "[vector] set_transceiver_mode ch%u failed\n", channel);
+                return r;
+            }
+            if (auto r = cmd_activate_channel(channel); !r)
+            {
+                if (debug())
+                    std::fprintf(stderr, "[vector] activate_channel ch%u failed\n", channel);
+                return r;
+            }
+
+            activated_channels_.push_back(channel);
+            last_bitrate_ = bitrate;
+            if (debug())
+                std::fprintf(stderr, "[vector] additional channel %u activated\n", channel);
             return {};
         }
 
@@ -944,6 +1005,10 @@ namespace jcan
                 return r;
             }
 
+            activated_channels_.clear();
+            activated_channels_.push_back(channel_);
+            last_bitrate_ = bitrate;
+
             if (debug())
                 std::fprintf(stderr, "[vector] === init sequence complete ===\n");
 
@@ -989,6 +1054,8 @@ namespace jcan
                 {
                     std::memcpy(f.data.data(), data + data_offset, payload_len);
                 }
+
+                f.source = ch;
 
                 if (debug())
                 {

@@ -5,6 +5,7 @@
 #include "internal/types.hpp"
 
 #include <chrono>
+#include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <string>
@@ -89,6 +90,9 @@ struct VectorDevice::Impl {
   bool open = false;
   std::string last_error;
   std::chrono::steady_clock::time_point t0{};
+  OpenConfig open_cfg{};
+  std::string primary_port;  // usb path:ch for reconnect
+  std::vector<uint8_t> activated_channels;
 };
 
 VectorDevice::VectorDevice() : impl_(new Impl) {}
@@ -98,17 +102,43 @@ VectorDevice::~VectorDevice() {
   impl_ = nullptr;
 }
 
+static uint8_t primary_channel_from_port(const std::string& port) {
+  auto pos = port.rfind(':');
+  if (pos == std::string::npos) return 0;
+  return static_cast<uint8_t>(std::atoi(port.c_str() + pos + 1));
+}
+
 Error VectorDevice::open(const OpenConfig& cfg) {
   if (impl_->open) return Error::AlreadyOpen;
   if (cfg.port.empty()) {
     impl_->last_error = "empty port";
     return Error::OpenFailed;
   }
-  auto r = impl_->dev.open(cfg.port, map_bitrate(cfg.bitrate_arb), 0);
+  const auto bitrate = map_bitrate(cfg.bitrate_arb);
+  auto r = impl_->dev.open(cfg.port, bitrate, 0);
   if (!r) {
     impl_->last_error = jcan::to_string(r.error());
     return map_error(r.error());
   }
+
+  const uint8_t primary = primary_channel_from_port(cfg.port);
+  impl_->activated_channels.clear();
+  impl_->activated_channels.push_back(primary);
+
+  for (uint8_t ch : cfg.channels) {
+    if (ch == primary) continue;
+    auto ar = impl_->dev.activate_additional_channel(ch, bitrate);
+    if (!ar) {
+      impl_->last_error = jcan::to_string(ar.error());
+      (void)impl_->dev.close();
+      impl_->activated_channels.clear();
+      return map_error(ar.error());
+    }
+    impl_->activated_channels.push_back(ch);
+  }
+
+  impl_->open_cfg = cfg;
+  impl_->primary_port = cfg.port;
   impl_->t0 = std::chrono::steady_clock::now();
   impl_->open = true;
   impl_->last_error.clear();
@@ -119,6 +149,7 @@ Error VectorDevice::close() {
   if (!impl_->open) return Error::NotOpen;
   auto r = impl_->dev.close();
   impl_->open = false;
+  impl_->activated_channels.clear();
   if (!r) {
     impl_->last_error = jcan::to_string(r.error());
     return map_error(r.error());

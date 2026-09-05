@@ -49,10 +49,12 @@ struct CanFrame {
 };
 
 struct OpenConfig {
-  std::string port;  // from DeviceInfo::port
+  std::string port;  // from DeviceInfo::port (path:primary_channel)
   uint32_t bitrate_arb = 500000;
   uint32_t bitrate_data = 2000000;  // reserved for later; open maps arb via slcan table
   bool listen_only = false;
+  /** Extra channels to activate after primary (from port). Empty = primary only. */
+  std::vector<uint8_t> channels;
 };
 
 /** C++17-safe facade over jcan vector_xl (implementation may use C++23). */

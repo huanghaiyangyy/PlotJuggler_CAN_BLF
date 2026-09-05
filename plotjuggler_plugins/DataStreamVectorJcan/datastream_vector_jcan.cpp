@@ -1,6 +1,7 @@
 #include "datastream_vector_jcan.h"
 
 #include <QCheckBox>
+#include <QDateTime>
 #include <QComboBox>
 #include <QDialog>
 #include <QDialogButtonBox>
@@ -10,12 +11,15 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
+#include <QMetaObject>
 #include <QPushButton>
 #include <QSpinBox>
 #include <QVBoxLayout>
 
+#include <algorithm>
 #include <chrono>
 #include <cstring>
+#include <set>
 
 #include "dbcppp_decoder.h"
 #include "jcan_vector/discovery.hpp"
@@ -33,6 +37,38 @@ uint8_t PayloadLen(const jcan_vector::CanFrame& f)
     return (f.dlc < 16) ? map[f.dlc] : 64;
   }
   return std::min<uint8_t>(f.dlc, 8);
+}
+
+QString UsbPathFromPort(const QString& port)
+{
+  const int colon = port.lastIndexOf(':');
+  if (colon < 0) return port;
+  return port.left(colon);
+}
+
+QString ChannelsToCsv(const std::vector<uint8_t>& channels)
+{
+  QStringList parts;
+  for (uint8_t ch : channels)
+  {
+    parts << QString::number(ch);
+  }
+  return parts.join(',');
+}
+
+std::vector<uint8_t> ChannelsFromCsv(const QString& csv)
+{
+  std::vector<uint8_t> out;
+  for (const QString& part : csv.split(',', PJ::SkipEmptyParts))
+  {
+    bool ok = false;
+    const int v = part.trimmed().toInt(&ok);
+    if (ok && v >= 0 && v <= 255)
+    {
+      out.push_back(static_cast<uint8_t>(v));
+    }
+  }
+  return out;
 }
 
 class PlotMapSeriesWriter : public BLF::ISeriesWriter
@@ -56,17 +92,20 @@ public:
   QComboBox* device_combo = nullptr;
   QSpinBox* bitrate_spin = nullptr;
   QCheckBox* demo_check = nullptr;
+  QCheckBox* auto_reconnect_check = nullptr;
   QCheckBox* raw_check = nullptr;
   QCheckBox* decoded_check = nullptr;
   QCheckBox* record_check = nullptr;
   QLineEdit* dbc_edit = nullptr;
   QLineEdit* blf_edit = nullptr;
-  std::vector<jcan_vector::DeviceInfo> devices;
+  QCheckBox* channel_checks[4] = {};
+  std::vector<jcan_vector::DeviceInfo> devices;       // unique usb devices (ch0 entry)
+  std::vector<jcan_vector::DeviceInfo> all_channels;  // full discovery list
 
   explicit ConnectDialog(QWidget* parent = nullptr) : QDialog(parent)
   {
     setWindowTitle(tr("Vector VN1640A (jcan)"));
-    resize(520, 320);
+    resize(540, 400);
     auto* layout = new QVBoxLayout(this);
     auto* form = new QFormLayout();
 
@@ -77,10 +116,21 @@ public:
     bitrate_spin->setSuffix(" bit/s");
 
     demo_check = new QCheckBox(tr("Demo mode (synthetic frames, no hardware)"), this);
+    auto_reconnect_check = new QCheckBox(tr("Auto-reconnect on disconnect"), this);
+    auto_reconnect_check->setChecked(true);
     raw_check = new QCheckBox(tr("Emit raw byte series"), this);
     decoded_check = new QCheckBox(tr("Emit DBC-decoded signals"), this);
     decoded_check->setChecked(true);
     record_check = new QCheckBox(tr("Record BLF"), this);
+
+    auto* ch_row = new QHBoxLayout();
+    for (int i = 0; i < 4; ++i)
+    {
+      channel_checks[i] = new QCheckBox(tr("ch%1").arg(i), this);
+      if (i == 0) channel_checks[i]->setChecked(true);
+      ch_row->addWidget(channel_checks[i]);
+    }
+    ch_row->addStretch(1);
 
     dbc_edit = new QLineEdit(this);
     auto* dbc_row = new QHBoxLayout();
@@ -104,10 +154,12 @@ public:
       if (!path.isEmpty()) blf_edit->setText(path);
     });
 
-    form->addRow(tr("Device / channel"), device_combo);
+    form->addRow(tr("Device"), device_combo);
+    form->addRow(tr("Channels"), ch_row);
     form->addRow(tr("Arbitration bitrate"), bitrate_spin);
     form->addRow(QString(), demo_check);
-    form->addRow(tr("DBC (channel 0)"), dbc_row);
+    form->addRow(QString(), auto_reconnect_check);
+    form->addRow(tr("DBC (all selected channels)"), dbc_row);
     form->addRow(QString(), raw_check);
     form->addRow(QString(), decoded_check);
     form->addRow(QString(), record_check);
@@ -120,28 +172,111 @@ public:
     layout->addWidget(buttons);
 
     refreshDevices();
+    connect(device_combo, qOverload<int>(&QComboBox::currentIndexChanged), this,
+            [this](int) { updateChannelAvailability(); });
     connect(demo_check, &QCheckBox::toggled, this, [this](bool on) {
       device_combo->setEnabled(!on);
       bitrate_spin->setEnabled(!on);
+      auto_reconnect_check->setEnabled(!on);
+      updateChannelAvailability();
     });
   }
 
   void refreshDevices()
   {
     device_combo->clear();
-    devices = jcan_vector::list_vector_devices();
-    for (const auto& d : devices)
+    devices.clear();
+    all_channels = jcan_vector::list_vector_devices();
+    std::set<std::string> seen;
+    for (const auto& d : all_channels)
     {
-      device_combo->addItem(QString::fromStdString(d.friendly_name),
-                            QString::fromStdString(d.port));
+      if (!seen.insert(d.usb_path).second) continue;
+      devices.push_back(d);
+      QString nice = QString::fromStdString(d.friendly_name);
+      const int ch_pos = nice.indexOf(" ch");
+      if (ch_pos > 0) nice = nice.left(ch_pos);
+      device_combo->addItem(QString("%1 (%2) — %3 ch")
+                                .arg(nice)
+                                .arg(QString::fromStdString(d.usb_path))
+                                .arg(d.num_channels),
+                            QString::fromStdString(d.usb_path));
     }
     if (devices.empty())
     {
       device_combo->addItem(tr("(no Vector USB device found)"), QString());
     }
+    updateChannelAvailability();
   }
 
-  QString selectedPort() const { return device_combo->currentData().toString(); }
+  void updateChannelAvailability()
+  {
+    int num = 4;
+    if (!demo_check->isChecked())
+    {
+      const QString usb = device_combo->currentData().toString();
+      num = 1;
+      for (const auto& d : devices)
+      {
+        if (QString::fromStdString(d.usb_path) == usb)
+        {
+          num = d.num_channels;
+          break;
+        }
+      }
+    }
+    for (int i = 0; i < 4; ++i)
+    {
+      const bool enable = (i < num);
+      channel_checks[i]->setEnabled(enable);
+      if (!enable) channel_checks[i]->setChecked(false);
+      if (enable && i == 0 && !anyChannelChecked()) channel_checks[0]->setChecked(true);
+    }
+  }
+
+  bool anyChannelChecked() const
+  {
+    for (auto* cb : channel_checks)
+    {
+      if (cb && cb->isChecked()) return true;
+    }
+    return false;
+  }
+
+  std::vector<uint8_t> selectedChannels() const
+  {
+    std::vector<uint8_t> out;
+    for (int i = 0; i < 4; ++i)
+    {
+      if (channel_checks[i] && channel_checks[i]->isEnabled() && channel_checks[i]->isChecked())
+      {
+        out.push_back(static_cast<uint8_t>(i));
+      }
+    }
+    if (out.empty()) out.push_back(0);
+    return out;
+  }
+
+  void setSelectedChannels(const std::vector<uint8_t>& channels)
+  {
+    for (int i = 0; i < 4; ++i) channel_checks[i]->setChecked(false);
+    for (uint8_t ch : channels)
+    {
+      if (ch < 4) channel_checks[ch]->setChecked(true);
+    }
+    if (!anyChannelChecked()) channel_checks[0]->setChecked(true);
+  }
+
+  QString selectedUsbPath() const { return device_combo->currentData().toString(); }
+
+  /** Port for first selected channel on the chosen device. */
+  QString selectedPort() const
+  {
+    const auto chs = selectedChannels();
+    const uint8_t primary = chs.empty() ? 0 : chs.front();
+    const QString usb = selectedUsbPath();
+    if (usb.isEmpty()) return QString();
+    return QString("%1:%2").arg(usb).arg(primary);
+  }
 };
 
 }  // namespace
@@ -151,11 +286,47 @@ DataStreamVectorJcan::DataStreamVectorJcan()
   _poll_timer = new QTimer(this);
   _poll_timer->setInterval(20);
   connect(_poll_timer, &QTimer::timeout, this, &DataStreamVectorJcan::onPoll);
+
+  _notification_action = new QAction(this);
+  connect(_notification_action, &QAction::triggered, this, [this]() {
+    const QString body =
+        _notification_messages.isEmpty() ?
+            tr("No notifications.") :
+            _notification_messages.join("\n");
+    QMessageBox::information(nullptr, tr("Vector VN1640A notifications"), body, QMessageBox::Ok);
+    _notifications_count = 0;
+    _notification_messages.clear();
+    emit notificationsChanged(0);
+  });
 }
 
 DataStreamVectorJcan::~DataStreamVectorJcan()
 {
   shutdown();
+}
+
+void DataStreamVectorJcan::pushNotification(const QString& msg)
+{
+  QMetaObject::invokeMethod(
+      this,
+      [this, msg]() {
+        _notification_messages.append(
+            QString("[%1] %2")
+                .arg(QDateTime::currentDateTime().toString("hh:mm:ss"))
+                .arg(msg));
+        while (_notification_messages.size() > 20)
+        {
+          _notification_messages.removeFirst();
+        }
+        ++_notifications_count;
+        emit notificationsChanged(_notifications_count);
+      },
+      Qt::QueuedConnection);
+}
+
+bool DataStreamVectorJcan::channelSelected(uint8_t ch) const
+{
+  return _channel_mask.find(ch) != _channel_mask.end();
 }
 
 DataStreamVectorJcan::ConnectResult DataStreamVectorJcan::runConnectDialog()
@@ -164,10 +335,14 @@ DataStreamVectorJcan::ConnectResult DataStreamVectorJcan::runConnectDialog()
   ConnectDialog dialog;
   if (!_last_port.isEmpty())
   {
-    const int idx = dialog.device_combo->findData(_last_port);
+    const QString usb = UsbPathFromPort(_last_port);
+    const int idx = dialog.device_combo->findData(usb);
     if (idx >= 0) dialog.device_combo->setCurrentIndex(idx);
   }
   dialog.bitrate_spin->setValue(_bitrate_arb);
+  dialog.demo_check->setChecked(_demo_mode);
+  dialog.auto_reconnect_check->setChecked(_auto_reconnect);
+  dialog.setSelectedChannels(_channels);
   dialog.raw_check->setChecked(_blf_config.emit_raw);
   dialog.decoded_check->setChecked(_blf_config.emit_decoded);
   if (!_blf_config.dbc_files.empty())
@@ -179,6 +354,11 @@ DataStreamVectorJcan::ConnectResult DataStreamVectorJcan::runConnectDialog()
     dialog.record_check->setChecked(true);
     dialog.blf_edit->setText(_last_blf_path);
   }
+  else if (_record_blf_pref)
+  {
+    dialog.record_check->setChecked(true);
+  }
+  dialog.updateChannelAvailability();
 
   if (dialog.exec() != QDialog::Accepted)
   {
@@ -186,7 +366,14 @@ DataStreamVectorJcan::ConnectResult DataStreamVectorJcan::runConnectDialog()
   }
 
   out.demo_mode = dialog.demo_check->isChecked();
+  out.auto_reconnect = dialog.auto_reconnect_check->isChecked();
+  out.channels = dialog.selectedChannels();
   out.port = dialog.selectedPort();
+  if (out.demo_mode && out.port.isEmpty())
+  {
+    // Demo does not need USB; synthesize a logical port for primary channel.
+    out.port = QString("demo:%1").arg(out.channels.empty() ? 0 : out.channels.front());
+  }
   out.bitrate_arb = dialog.bitrate_spin->value();
   out.record_blf = dialog.record_check->isChecked();
   out.blf_path = dialog.blf_edit->text();
@@ -197,7 +384,10 @@ DataStreamVectorJcan::ConnectResult DataStreamVectorJcan::runConnectDialog()
   if (!dbc.isEmpty())
   {
     out.blf_config.dbc_files = { dbc.toStdString() };
-    out.blf_config.channel_to_dbc[0] = dbc.toStdString();
+    for (uint8_t ch : out.channels)
+    {
+      out.blf_config.channel_to_dbc[ch] = dbc.toStdString();
+    }
   }
   out.ok = true;
   return out;
@@ -223,6 +413,12 @@ bool DataStreamVectorJcan::start(QStringList*)
     return false;
   }
 
+  if (cfg.channels.empty())
+  {
+    QMessageBox::warning(nullptr, tr("Vector VN1640A"), tr("Select at least one channel."));
+    return false;
+  }
+
   if (cfg.blf_config.emit_decoded && cfg.blf_config.dbc_files.empty())
   {
     QMessageBox::warning(nullptr, tr("Vector VN1640A"),
@@ -231,12 +427,20 @@ bool DataStreamVectorJcan::start(QStringList*)
   }
 
   _demo_mode = cfg.demo_mode;
+  _auto_reconnect = cfg.auto_reconnect;
   _last_port = cfg.port;
   _bitrate_arb = cfg.bitrate_arb;
   _blf_config = cfg.blf_config;
   _last_blf_path = cfg.blf_path;
-  _channel = 0;
+  _record_blf_pref = cfg.record_blf;
+  _channels = cfg.channels;
+  _channel_mask = std::unordered_set<uint8_t>(_channels.begin(), _channels.end());
+  _primary_channel = _channels.front();
   _t0 = std::chrono::steady_clock::now();
+
+  _notifications_count = 0;
+  _notification_messages.clear();
+  emit notificationsChanged(0);
 
   _series_writer = std::make_unique<PlotMapSeriesWriter>(this);
   _dbc_manager = std::make_unique<BLF::DbcManager>([](const std::string& path) {
@@ -287,11 +491,13 @@ bool DataStreamVectorJcan::start(QStringList*)
 
   if (!_demo_mode)
   {
+    _open_cfg = {};
+    _open_cfg.port = cfg.port.toStdString();
+    _open_cfg.bitrate_arb = static_cast<uint32_t>(cfg.bitrate_arb);
+    _open_cfg.channels = cfg.channels;
+
     _device = std::make_unique<jcan_vector::VectorDevice>();
-    jcan_vector::OpenConfig open_cfg;
-    open_cfg.port = cfg.port.toStdString();
-    open_cfg.bitrate_arb = static_cast<uint32_t>(cfg.bitrate_arb);
-    const auto err = _device->open(open_cfg);
+    const auto err = _device->open(_open_cfg);
     if (err != jcan_vector::Error::Ok)
     {
       QMessageBox::warning(nullptr, tr("Vector VN1640A"),
@@ -350,10 +556,7 @@ void DataStreamVectorJcan::shutdown()
   _pipeline.reset();
   _dbc_manager.reset();
   _series_writer.reset();
-  if (was_running)
-  {
-    // leave series in place
-  }
+  (void)was_running;
 }
 
 bool DataStreamVectorJcan::isRunning() const
@@ -363,13 +566,60 @@ bool DataStreamVectorJcan::isRunning() const
 
 void DataStreamVectorJcan::rxLoopHardware()
 {
+  int backoff_ms = 1000;
   while (_running)
   {
-    std::vector<jcan_vector::CanFrame> frames;
-    if (_device)
+    if (!_device)
     {
-      _device->recv_many(frames, 20);
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+      continue;
     }
+
+    if (!_device->is_open())
+    {
+      if (!_auto_reconnect)
+      {
+        pushNotification(tr("Device not open; auto-reconnect disabled."));
+        // Keep looping until shutdown rather than crashing; user can stop stream.
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        continue;
+      }
+
+      const auto err = _device->open(_open_cfg);
+      if (err == jcan_vector::Error::Ok)
+      {
+        pushNotification(tr("Reconnected to %1").arg(QString::fromStdString(_open_cfg.port)));
+        backoff_ms = 1000;
+        continue;
+      }
+      pushNotification(tr("Reconnect failed (%1): %2")
+                           .arg(QString::fromUtf8(jcan_vector::to_string(err)))
+                           .arg(QString::fromStdString(_device->last_error())));
+      std::this_thread::sleep_for(std::chrono::milliseconds(backoff_ms));
+      backoff_ms = std::min(backoff_ms + 1000, 5000);
+      continue;
+    }
+
+    std::vector<jcan_vector::CanFrame> frames;
+    const auto err = _device->recv_many(frames, 20);
+    if (err == jcan_vector::Error::IoError || err == jcan_vector::Error::NotOpen ||
+        err == jcan_vector::Error::Unavailable || !_device->is_open())
+    {
+      pushNotification(tr("Device disconnected (%1)")
+                           .arg(QString::fromUtf8(jcan_vector::to_string(err))));
+      if (_device->is_open())
+      {
+        _device->close();
+      }
+      backoff_ms = 1000;
+      if (!_auto_reconnect)
+      {
+        continue;
+      }
+      // Fall through to reconnect path on next iteration.
+      continue;
+    }
+
     if (!frames.empty())
     {
       std::lock_guard<std::mutex> lock(_queue_mutex);
@@ -381,6 +631,7 @@ void DataStreamVectorJcan::rxLoopHardware()
 void DataStreamVectorJcan::rxLoopDemo()
 {
   uint32_t counter = 0;
+  size_t ch_index = 0;
   while (_running)
   {
     jcan_vector::CanFrame f;
@@ -392,6 +643,15 @@ void DataStreamVectorJcan::rxLoopDemo()
     f.data[0] = static_cast<uint8_t>((counter >> 8) & 0xFF);
     f.data[1] = static_cast<uint8_t>(counter & 0xFF);
     f.data[2] = static_cast<uint8_t>(counter % 100);
+    if (!_channels.empty())
+    {
+      f.source = _channels[ch_index % _channels.size()];
+      ch_index++;
+    }
+    else
+    {
+      f.source = 0;
+    }
     f.timestamp_sec =
         std::chrono::duration<double>(std::chrono::steady_clock::now() - _t0).count();
     {
@@ -422,6 +682,12 @@ void DataStreamVectorJcan::processFrames(const std::vector<jcan_vector::CanFrame
   std::lock_guard<std::mutex> lock(mutex());
   for (const auto& f : frames)
   {
+    const uint8_t ch = (f.source != 0xff) ? f.source : _primary_channel;
+    if (!channelSelected(ch))
+    {
+      continue;
+    }
+
     BLF::NormalizedCanFrame nf;
     nf.timestamp = f.timestamp_sec;
     if (nf.timestamp <= 0.0)
@@ -429,7 +695,7 @@ void DataStreamVectorJcan::processFrames(const std::vector<jcan_vector::CanFrame
       nf.timestamp =
           std::chrono::duration<double>(std::chrono::steady_clock::now() - _t0).count();
     }
-    nf.channel = _channel;
+    nf.channel = ch;
     nf.id = f.id;
     nf.is_fd = f.fd;
     nf.is_brs = f.brs;
@@ -457,6 +723,10 @@ bool DataStreamVectorJcan::xmlSaveState(QDomDocument& doc, QDomElement& parent_e
   el.setAttribute("port", _last_port);
   el.setAttribute("bitrate_arb", _bitrate_arb);
   el.setAttribute("blf_path", _last_blf_path);
+  el.setAttribute("demo_mode", _demo_mode ? 1 : 0);
+  el.setAttribute("auto_reconnect", _auto_reconnect ? 1 : 0);
+  el.setAttribute("channels", ChannelsToCsv(_channels));
+  el.setAttribute("record_blf", _record_blf_pref ? 1 : 0);
   parent_element.appendChild(el);
   BLF::SaveConfigToXml(_blf_config, doc, parent_element);
   return true;
@@ -470,6 +740,16 @@ bool DataStreamVectorJcan::xmlLoadState(const QDomElement& parent_element)
     _last_port = el.attribute("port");
     _bitrate_arb = el.attribute("bitrate_arb", "500000").toInt();
     _last_blf_path = el.attribute("blf_path");
+    _demo_mode = el.attribute("demo_mode", "0").toInt() != 0;
+    _auto_reconnect = el.attribute("auto_reconnect", "1").toInt() != 0;
+    _record_blf_pref = el.attribute("record_blf", "0").toInt() != 0;
+    const auto loaded = ChannelsFromCsv(el.attribute("channels", "0"));
+    if (!loaded.empty())
+    {
+      _channels = loaded;
+      _channel_mask = std::unordered_set<uint8_t>(_channels.begin(), _channels.end());
+      _primary_channel = _channels.front();
+    }
   }
   BLF::LoadConfigFromXml(parent_element, _blf_config);
   return true;
