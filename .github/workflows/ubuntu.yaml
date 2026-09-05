@@ -44,9 +44,15 @@ jobs:
           ${SUDO} apt-get update
           ${SUDO} apt-get install -y -V --no-install-recommends \
             build-essential cmake pkg-config git ccache software-properties-common \
+            gnupg \
             qtbase5-dev libqt5svg5-dev libqt5websockets5-dev libqt5opengl5-dev \
             libqt5x11extras5-dev libprotoc-dev libmosquitto-dev ca-certificates \
-            lsb-release wget libcurl4-openssl-dev file
+            lsb-release wget libcurl4-openssl-dev file \
+            libusb-1.0-0-dev
+          # g++-9 on ubuntu:20.04 lacks C++23 (<expected>); install g++-13 for jcan_vector
+          ${SUDO} add-apt-repository -y ppa:ubuntu-toolchain-r/test
+          ${SUDO} apt-get update
+          ${SUDO} apt-get install -y -V --no-install-recommends g++-13 gcc-13
 
       - name: Install Apache Arrow for Parquet support
         shell: bash
@@ -93,9 +99,11 @@ jobs:
               ${SUDO} apt-get install -y -V --no-install-recommends build-essential cmake pkg-config git
             fi
             mkdir -p build
+            export CC=gcc-13 CXX=g++-13
             if ! cmake . -B build -DCMAKE_BUILD_TYPE=Release -DPJ_INSTALLATION="appimage" \
               -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
               -DPJ_ENABLE_VECTOR_BLF=ON -DPJ_ENABLE_DBCPPP=ON \
+              -DPJ_ENABLE_VECTOR_JCAN=ON \
               -DPJ_ENABLE_PARSER_PROTOBUF=OFF \
               -DPJ_PLUGINS_DIRECTORY="bin" 2>&1 | tee build/configure.log; then
               tail="$(tail -n 120 build/configure.log)"
@@ -133,6 +141,11 @@ jobs:
             fi
             if strings build/bin/libDataLoadBLF.so | grep -q "dbcppp support is not available in this build"; then
               echo "::error title=DBC support disabled::libDataLoadBLF.so contains fallback 'dbcppp support is not available in this build'"
+              exit 1
+            fi
+
+            if [ ! -f build/bin/libDataStreamVectorJcan.so ]; then
+              echo "::error title=Vector JCAN plugin missing::build/bin/libDataStreamVectorJcan.so was not produced"
               exit 1
             fi
 
